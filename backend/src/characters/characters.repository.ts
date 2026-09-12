@@ -5,7 +5,7 @@ import { DatabaseService } from '../database/database.service.js';
 export class CharactersRepository {
   constructor(
     private readonly database: DatabaseService,
-  ) {}
+  ) { }
 
   async findByUserId(userId: string) {
     const result = await this.database.query(
@@ -57,5 +57,69 @@ export class CharactersRepository {
     }
 
     return this.create(userId);
+  }
+
+  async updateProgress(
+    client: import('pg').PoolClient,
+    userId: string,
+    data: {
+      level: number;
+      totalXp: number;
+      gold: number;
+      attribute: string;
+      attributePoints: number;
+      currentStreak: number;
+      longestStreak: number;
+      lastActivityDate: string;
+    },
+  ) {
+    const attributeColumnMap: Record<
+      string,
+      string
+    > = {
+      STRENGTH: 'strength',
+      INTELLECT: 'intellect',
+      DISCIPLINE: 'discipline',
+      CREATIVITY: 'creativity',
+    };
+
+    const attributeColumn =
+      attributeColumnMap[data.attribute];
+
+    if (!attributeColumn) {
+      throw new Error('Invalid attribute');
+    }
+
+    const query = `
+    UPDATE characters
+    SET
+      level = $2,
+      total_xp = $3,
+      gold = $4,
+      ${attributeColumn} =
+        ${attributeColumn} + $5,
+      current_streak = $6,
+      longest_streak = $7,
+      last_activity_date = $8,
+      updated_at = NOW()
+    WHERE user_id = $1
+    RETURNING *
+  `;
+
+    const result = await client.query(
+      query,
+      [
+        userId,
+        data.level,
+        data.totalXp,
+        data.gold,
+        data.attributePoints,
+        data.currentStreak,
+        data.longestStreak,
+        data.lastActivityDate,
+      ],
+    );
+
+    return result.rows[0] ?? null;
   }
 }

@@ -1,4 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 
 import { CharactersService } from '../characters/characters.service.js';
 import { UsersRepository } from './users.repository.js';
@@ -37,5 +40,22 @@ export class UsersService {
 
   async getUserById(id: string) {
     return this.usersRepository.findById(id);
+  }
+
+  async getInternalUserId(
+    firebaseUid: string,
+  ): Promise<string> {
+    const user =
+      await this.usersRepository.findByFirebaseUid(
+        firebaseUid,
+      );
+
+    if (!user) {
+      throw new UnauthorizedException(
+        'User account not found',
+      );
+    }
+
+    return user.id;
   }
 }

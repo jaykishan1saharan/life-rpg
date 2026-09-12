@@ -9,6 +9,7 @@ import { CharactersService } from './characters.service.js';
     CharactersService,
   ],
   exports: [
+    CharactersRepository,
     CharactersService,
   ],
 })
