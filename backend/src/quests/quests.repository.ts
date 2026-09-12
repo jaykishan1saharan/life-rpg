@@ -55,14 +55,37 @@ export class QuestsRepository {
         return result.rows[0];
     }
 
-    async findAllByUserId(userId: string) {
+    async findAll(userId: string) {
         const result = await this.database.query(
             `
-      SELECT *
-      FROM quests
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      `,
+    SELECT
+      q.id,
+      q.title,
+      q.description,
+      q.category,
+      q.difficulty,
+      q.attribute,
+      q.xp_reward,
+      q.gold_reward,
+      q.attribute_reward,
+      q.is_active,
+      q.created_at,
+      q.updated_at,
+
+      EXISTS (
+        SELECT 1
+        FROM quest_completions qc
+        WHERE qc.quest_id = q.id
+          AND qc.user_id = $1
+          AND qc.completed_at::date = CURRENT_DATE
+      ) AS completed_today
+
+    FROM quests q
+    WHERE q.user_id = $1
+      AND q.is_active = TRUE
+
+    ORDER BY q.created_at DESC
+    `,
             [userId],
         );
 

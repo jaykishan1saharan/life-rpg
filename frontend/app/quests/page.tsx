@@ -17,6 +17,7 @@ interface Quest {
   gold_reward: number;
   attribute_reward: number;
   is_active: boolean;
+  completed_today: boolean;
 }
 
 interface Character {
@@ -38,6 +39,15 @@ const difficultyReward = {
 
 export default function QuestsPage() {
   const [quests, setQuests] = useState<Quest[]>([]);
+
+  const activeQuests = quests.filter(
+    (quest) => !quest.completed_today
+  );
+
+  const completedQuests = quests.filter(
+    (quest) => quest.completed_today
+  );
+
   const [character, setCharacter] =
     useState<Character | null>(null);
 
@@ -103,7 +113,7 @@ export default function QuestsPage() {
 
       setCharacter(
         characterData.character ??
-          characterData,
+        characterData,
       );
     } catch (error) {
       console.error(error);
@@ -130,7 +140,7 @@ export default function QuestsPage() {
 
       const reward =
         difficultyReward[
-          form.difficulty as keyof typeof difficultyReward
+        form.difficulty as keyof typeof difficultyReward
         ];
 
       const response = await fetch(
@@ -224,10 +234,6 @@ export default function QuestsPage() {
     }
   }
 
-  const activeQuests = quests.filter(
-    (quest) => quest.is_active,
-  );
-
   return (
     <AppShell
       gold={character?.gold ?? 0}
@@ -317,38 +323,117 @@ export default function QuestsPage() {
               <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-gray-500">
                 Loading quests...
               </div>
-            ) : activeQuests.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
-                <div className="text-4xl">⚔️</div>
-
-                <h3 className="mt-4 text-xl font-black">
-                  No active quests
-                </h3>
-
-                <p className="mt-2 text-sm text-gray-500">
-                  Create your first real-life mission.
-                </p>
-
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="mt-5 rounded-xl border border-cyan-400/30 px-5 py-3 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400/10"
-                >
-                  CREATE QUEST
-                </button>
-              </div>
             ) : (
-              <div className="space-y-3">
-                {activeQuests.map((quest) => (
-                  <QuestCard
-                    key={quest.id}
-                    quest={quest}
-                    completing={completing === quest.id}
-                    onComplete={() =>
-                      completeQuest(quest.id)
-                    }
-                  />
-                ))}
-              </div>
+              <>
+                {/* ACTIVE QUESTS */}
+                {activeQuests.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
+                    <div className="text-4xl">⚔️</div>
+
+                    <h3 className="mt-4 text-xl font-black">
+                      No active quests
+                    </h3>
+
+                    <p className="mt-2 text-sm text-gray-500">
+                      Create your next real-life mission.
+                    </p>
+
+                    <button
+                      onClick={() => setShowCreate(true)}
+                      className="mt-5 rounded-xl border border-cyan-400/30 px-5 py-3 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400/10"
+                    >
+                      CREATE QUEST
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeQuests.map((quest) => (
+                      <QuestCard
+                        key={quest.id}
+                        quest={quest}
+                        completing={completing === quest.id}
+                        onComplete={() => completeQuest(quest.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* COMPLETED TODAY */}
+                {completedQuests.length > 0 && (
+                  <section className="mt-12">
+
+                    <div className="mb-5 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs font-bold tracking-[0.3em] text-green-400">
+                          ADVENTURE LOG
+                        </p>
+
+                        <h2 className="mt-1 text-2xl font-black">
+                          COMPLETED TODAY
+                        </h2>
+
+                        <p className="mt-1 text-sm text-gray-500">
+                          Victories already claimed today.
+                        </p>
+                      </div>
+
+                      <span className="text-xs text-green-400/60">
+                        {completedQuests.length} completed
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {completedQuests.map((quest) => (
+                        <div
+                          key={quest.id}
+                          className="rounded-2xl border border-green-400/10 bg-green-400/[0.02] p-5 opacity-70"
+                        >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                            <div className="min-w-0">
+                              <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-wider">
+                                <span className="rounded-md border border-green-400/20 bg-green-400/5 px-2 py-1 text-green-400">
+                                  ✓ COMPLETED
+                                </span>
+
+                                <span className="text-gray-600">
+                                  {quest.category}
+                                </span>
+
+                                <span className="text-green-400/70">
+                                  • {quest.attribute}
+                                </span>
+                              </div>
+
+                              <h3 className="text-lg font-black text-gray-300">
+                                {quest.title}
+                              </h3>
+
+                              {quest.description && (
+                                <p className="mt-1 text-sm text-gray-600">
+                                  {quest.description}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm font-black text-cyan-400/70">
+                                +{quest.xp_reward} XP
+                              </p>
+
+                              <p className="text-xs font-bold text-yellow-400/70">
+                                +{quest.gold_reward} Gold
+                              </p>
+                            </div>
+
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                  </section>
+                )}
+              </>
             )}
 
           </section>
@@ -467,11 +552,10 @@ export default function QuestsPage() {
                             difficulty,
                           })
                         }
-                        className={`rounded-xl border px-2 py-3 text-[10px] font-bold transition ${
-                          form.difficulty === difficulty
-                            ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
-                            : 'border-white/10 text-gray-600 hover:text-gray-300'
-                        }`}
+                        className={`rounded-xl border px-2 py-3 text-[10px] font-bold transition ${form.difficulty === difficulty
+                          ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+                          : 'border-white/10 text-gray-600 hover:text-gray-300'
+                          }`}
                       >
                         <div>{difficulty}</div>
                         <div className="mt-1 text-[9px]">

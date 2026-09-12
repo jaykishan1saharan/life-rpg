@@ -32,9 +32,7 @@ export class QuestsService {
     }
 
     async findAll(userId: string) {
-        return this.questsRepository.findAllByUserId(
-            userId,
-        );
+        return this.questsRepository.findAll(userId);
     }
 
     async findOne(
