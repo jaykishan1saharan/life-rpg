@@ -57,6 +57,7 @@ interface Quest {
     gold_reward: number;
     attribute_reward: number;
     is_active: boolean;
+    completed_today: boolean;
 }
 
 interface MeResponse {
@@ -111,6 +112,11 @@ export default function DashboardPage() {
 
     const [quests, setQuests] =
         useState<Quest[]>([]);
+
+    const activeQuests = useMemo(
+        () => quests.filter((quest) => !quest.completed_today),
+        [quests],
+    );
 
     const [loading, setLoading] =
         useState(true);
@@ -549,6 +555,11 @@ export default function DashboardPage() {
                             <h2 className="text-3xl font-black">
                                 QUEST BOARD
                             </h2>
+
+                            <p className="mt-1 text-sm text-gray-600">
+                                {activeQuests.length} active mission
+                                {activeQuests.length !== 1 ? 's' : ''}
+                            </p>
                         </div>
 
                         <button
@@ -563,22 +574,29 @@ export default function DashboardPage() {
 
                     {/* QUESTS */}
                     <section className="space-y-3">
-                        {quests.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center">
+                        {activeQuests.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-cyan-400/10 bg-cyan-400/[0.02] p-12 text-center">
                                 <div className="mb-3 text-4xl">
-                                    🗡️
+                                    ⚔️
                                 </div>
 
                                 <p className="font-semibold">
-                                    No active quests
+                                    All quests cleared!
                                 </p>
 
                                 <p className="mt-1 text-sm text-gray-500">
-                                    Create your first mission.
+                                    Your battlefield is empty. Create your next mission.
                                 </p>
+
+                                <button
+                                    onClick={() => setShowCreateQuest(true)}
+                                    className="mt-5 rounded-xl border border-cyan-400/30 px-5 py-3 text-sm font-bold text-cyan-300 transition hover:bg-cyan-400/10"
+                                >
+                                    + CREATE QUEST
+                                </button>
                             </div>
                         ) : (
-                            quests.map((quest, index) => (
+                            activeQuests.map((quest, index) => (
                                 <motion.div
                                     key={quest.id}
                                     initial={{
