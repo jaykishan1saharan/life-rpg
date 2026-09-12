@@ -18,6 +18,7 @@ import { auth } from '../../src/lib/firebase';
 import { apiRequest } from '../../src/services/api.service';
 
 import AppShell from '../../src/components/layout/AppShell';
+import LevelUpModal from '../../src/components/rpg/LevelUpModal';
 
 interface Character {
     id: string;
@@ -156,6 +157,11 @@ export default function DashboardPage() {
         setCharacter(me.character);
         setQuests(questData);
     };
+
+    const [levelUp, setLevelUp] = useState({
+        open: false,
+        level: 1,
+    });
 
     useEffect(() => {
         const unsubscribe =
@@ -340,9 +346,9 @@ export default function DashboardPage() {
 
     return (
         <AppShell
-  gold={character.gold}
-  streak={character.current_streak}
->
+            gold={character.gold}
+            streak={character.current_streak}
+        >
             <main className="min-h-screen overflow-hidden bg-[#050509] text-white">
                 {/* Ambient background */}
                 <div className="pointer-events-none fixed inset-0">
@@ -941,6 +947,18 @@ export default function DashboardPage() {
                     )}
                 </AnimatePresence>
             </main>
+
+            <LevelUpModal
+                open={levelUp.open}
+                level={levelUp.level}
+                onClose={() =>
+                    setLevelUp({
+                        open: false,
+                        level: levelUp.level,
+                    })
+                }
+            />
+
         </AppShell>
     );
 }
