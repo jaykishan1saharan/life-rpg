@@ -340,9 +340,9 @@ export default function DashboardPage() {
 
     return (
         <AppShell
-            gold={character.gold}
-            streak={character.current_streak}
-        >
+  gold={character.gold}
+  streak={character.current_streak}
+>
             <main className="min-h-screen overflow-hidden bg-[#050509] text-white">
                 {/* Ambient background */}
                 <div className="pointer-events-none fixed inset-0">

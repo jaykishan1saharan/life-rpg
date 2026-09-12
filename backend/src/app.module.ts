@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { UsersModule } from './users/users.module.js';
 import { QuestsModule } from './quests/quests.module.js';
 import { RpgModule } from './rpg/rpg.module.js';
+import { RewardsModule } from './rewards/rewards.module.js';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -21,6 +22,7 @@ import { AppService } from './app.service.js';
     UsersModule,
     QuestsModule,
     RpgModule,
+    RewardsModule,
   ],
 
   controllers: [
