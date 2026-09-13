@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+
 import AppShell from '../../src/components/layout/AppShell';
 import { getAuth } from 'firebase/auth';
 import { app } from '../../src/lib/firebase';
@@ -42,6 +44,18 @@ interface InventoryItem {
   type?: 'ITEM' | 'THEME' | 'BADGE';
   price?: number;
   image_url?: string | null;
+
+  metadata?: {
+    icon?: string;
+    rarity?: string;
+    effect?: string;
+    auraStyle?: string;
+    auraColor?: string;
+    animation?: string;
+    themeStyle?: string;
+    badgeStyle?: string;
+    badgeColor?: string;
+  };
 }
 
 interface ShopItem {
@@ -50,6 +64,21 @@ interface ShopItem {
   description: string | null;
   type: 'ITEM' | 'THEME' | 'BADGE';
   price: number;
+  image_url?: string | null;
+
+  metadata?: {
+    icon?: string;
+    rarity?: string;
+    effect?: string;
+    auraStyle?: string;
+    auraColor?: string;
+    animation?: string;
+    themeStyle?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+    badgeStyle?: string;
+    badgeColor?: string;
+  };
 }
 
 const API_URL =
@@ -246,6 +275,34 @@ export default function CharacterPage() {
     ownedItemIds.has(item.id),
   );
 
+  const equippedItems = inventory.filter(
+    (item) => item.is_equipped,
+  );
+
+  const equippedAura = equippedItems.find(
+    (item) =>
+      item.metadata?.effect === 'AURA',
+  );
+
+  const equippedTheme = equippedItems.find(
+    (item) =>
+      item.metadata?.effect === 'THEME',
+  );
+
+  const equippedBadges = equippedItems.filter(
+    (item) =>
+      item.metadata?.effect === 'BADGE',
+  );
+
+  const equippedRegularItem = equippedItems.find(
+    (item) =>
+      item.metadata?.effect === 'ITEM',
+  );
+
+  const themeStyles = getThemeStyles(
+    equippedTheme?.metadata?.themeStyle,
+  );
+
   const previousLevelXp =
     character.level <= 1
       ? 0
@@ -296,9 +353,13 @@ export default function CharacterPage() {
           </div>
 
           {/* HERO */}
-          <section className="grid gap-6 lg:grid-cols-[1.1fr_1.9fr]">
+          <section
+            className={`grid gap-6 lg:grid-cols-[1.1fr_1.9fr]`}
+          >
 
-            <div className="relative overflow-hidden rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-400/10 via-white/[0.02] to-purple-500/10 p-7">
+            <div
+              className={`relative overflow-hidden rounded-3xl border bg-gradient-to-br p-7 transition-all duration-700 ${themeStyles.border} ${themeStyles.background} ${themeStyles.glow}`}
+            >
 
               <div className="absolute right-5 top-5 text-[10px] font-bold tracking-[0.3em] text-cyan-400">
                 HERO
@@ -306,9 +367,121 @@ export default function CharacterPage() {
 
               <div className="flex flex-col items-center text-center">
 
-                <div className="flex h-32 w-32 items-center justify-center rounded-3xl border border-cyan-400/30 bg-cyan-400/10 text-6xl shadow-[0_0_60px_rgba(34,211,238,0.15)]">
-                  🧙
+                {equippedBadges.length > 0 && (
+                  <div className="mb-5 flex flex-wrap justify-center gap-2">
+                    {equippedBadges.map((badge) => (
+                      <motion.div
+                        key={badge.id}
+                        initial={{
+                          opacity: 0,
+                          y: -10,
+                        }}
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                        }}
+                        className="rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1.5 text-xs font-bold text-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.10)]"
+                      >
+                        {badge.metadata?.icon || '🏆'}{' '}
+                        {badge.name}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="relative flex h-48 w-48 items-center justify-center">
+
+                  {/* AURA EFFECT */}
+                  {equippedAura && (
+                    <>
+                      <motion.div
+                        className="absolute inset-[-15px] rounded-full border border-cyan-400/20"
+                        animate={{
+                          scale: [1, 1.12, 1],
+                          opacity: [0.15, 0.5, 0.15],
+                        }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        }}
+                      />
+
+                      <motion.div
+                        className="absolute inset-[-30px] rounded-full bg-cyan-400/10 blur-3xl"
+                        animate={{
+                          scale: [0.9, 1.15, 0.9],
+                          opacity: [0.15, 0.4, 0.15],
+                        }}
+                        transition={{
+                          duration: 3.5,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        }}
+                      />
+
+                      <motion.div
+                        className="absolute inset-[-8px] rounded-full border border-cyan-300/30"
+                        animate={{
+                          rotate: 360,
+                        }}
+                        transition={{
+                          duration: 8,
+                          repeat: Infinity,
+                          ease: 'linear',
+                        }}
+                      />
+                    </>
+                  )}
+
+                  {/* CHARACTER */}
+                  <motion.div
+                    className="relative z-10 flex h-32 w-32 items-center justify-center rounded-3xl border border-cyan-400/30 bg-cyan-400/10 text-6xl"
+                    animate={{
+                      y: [0, -6, 0],
+                    }}
+                    transition={{
+                      duration: 3,
+                      repeat: Infinity,
+                      ease: 'easeInOut',
+                    }}
+                  >
+                    🧙
+                  </motion.div>
+
+                  {equippedRegularItem && (
+                    <motion.div
+                      initial={{
+                        opacity: 0,
+                        x: 20,
+                      }}
+                      animate={{
+                        opacity: 1,
+                        x: 0,
+                      }}
+                      className="absolute bottom-0 right-0 z-20 rounded-xl border border-white/10 bg-black/70 px-3 py-2 backdrop-blur"
+                    >
+                      <span className="text-lg">
+                        {equippedRegularItem.metadata?.icon || '⚔️'}
+                      </span>
+
+                      <span className="ml-2 text-[10px] font-bold text-gray-300">
+                        {equippedRegularItem.name}
+                      </span>
+                    </motion.div>
+                  )}
+
                 </div>
+
+                {equippedTheme && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className={`mt-4 text-xs font-black uppercase tracking-[0.3em] ${themeStyles.accent}`}
+                  >
+                    {equippedTheme.name}
+                  </motion.div>
+                )}
 
                 <p className="mt-6 text-xs tracking-[0.3em] text-gray-500">
                   LEVEL {character.level}
@@ -479,8 +652,8 @@ export default function CharacterPage() {
                     <div
                       key={item.id}
                       className={`rounded-2xl border p-5 transition ${equipped
-                          ? 'border-cyan-400/40 bg-cyan-400/10 shadow-[0_0_30px_rgba(34,211,238,0.08)]'
-                          : 'border-white/10 bg-black/20 hover:border-cyan-400/20'
+                        ? 'border-cyan-400/40 bg-cyan-400/10 shadow-[0_0_30px_rgba(34,211,238,0.08)]'
+                        : 'border-white/10 bg-black/20 hover:border-cyan-400/20'
                         }`}
                     >
 
@@ -513,15 +686,21 @@ export default function CharacterPage() {
                           {item.type}
                         </span>
 
-                        {!equipped && inventoryItem && (
-                          <button
-                            onClick={() =>
-                              handleEquip(item.id)
-                            }
-                            className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/20"
-                          >
-                            EQUIP
-                          </button>
+                        {equipped ? (
+                          <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-400">
+                            ✓ EQUIPPED
+                          </div>
+                        ) : (
+                          inventoryItem && (
+                            <button
+                              onClick={() =>
+                                handleEquip(item.id)
+                              }
+                              className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/20"
+                            >
+                              EQUIP
+                            </button>
+                          )
                         )}
 
                       </div>
@@ -601,4 +780,46 @@ function ProgressStat({
       </p>
     </div>
   );
+}
+
+function getThemeStyles(
+  themeStyle?: string,
+) {
+  switch (themeStyle) {
+    case 'cyber-knight':
+      return {
+        background:
+          'from-cyan-400/10 via-purple-500/5 to-blue-500/10',
+        border:
+          'border-cyan-400/30',
+        glow:
+          'shadow-[0_0_60px_rgba(34,211,238,0.12)]',
+        accent:
+          'text-cyan-400',
+      };
+
+    case 'void-walker':
+      return {
+        background:
+          'from-purple-950/40 via-black to-indigo-950/30',
+        border:
+          'border-purple-500/30',
+        glow:
+          'shadow-[0_0_70px_rgba(139,92,246,0.15)]',
+        accent:
+          'text-purple-400',
+      };
+
+    default:
+      return {
+        background:
+          'from-cyan-400/10 via-white/[0.02] to-purple-500/10',
+        border:
+          'border-cyan-400/20',
+        glow:
+          'shadow-[0_0_60px_rgba(34,211,238,0.10)]',
+        accent:
+          'text-cyan-400',
+      };
+  }
 }

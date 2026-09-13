@@ -41,3 +41,63 @@ VALUES
   300,
   '{"rarity":"LEGENDARY","icon":"🌌"}'
 );
+
+
+
+UPDATE shop_items
+SET metadata =
+  COALESCE(metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'effect', 'AURA',
+    'auraStyle', 'neon',
+    'auraColor', 'cyan',
+    'animation', 'pulse'
+  )
+WHERE name = 'Neon Aura';
+
+UPDATE shop_items
+SET metadata =
+  COALESCE(metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'effect', 'THEME',
+    'themeStyle', 'cyber-knight',
+    'primaryColor', 'cyan',
+    'secondaryColor', 'purple',
+    'animation', 'glow'
+  )
+WHERE name = 'Cyber Knight';
+
+UPDATE shop_items
+SET metadata =
+  COALESCE(metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'effect', 'BADGE',
+    'badgeStyle', 'xp-hunter',
+    'badgeColor', 'blue',
+    'animation', 'pulse'
+  )
+WHERE name = 'XP Hunter';
+
+UPDATE shop_items
+SET metadata =
+  COALESCE(metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'effect', 'BADGE',
+    'badgeStyle', 'legendary-crown',
+    'badgeColor', 'gold',
+    'animation', 'shine'
+  )
+WHERE name = 'Legendary Crown';
+
+UPDATE shop_items
+SET metadata =
+  COALESCE(metadata, '{}'::jsonb)
+  || jsonb_build_object(
+    'effect', 'THEME',
+    'themeStyle', 'void-walker',
+    'primaryColor', 'purple',
+    'secondaryColor', 'black',
+    'animation', 'glow'
+  )
+WHERE name = 'Void Walker';
+
