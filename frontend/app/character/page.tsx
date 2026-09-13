@@ -30,6 +30,21 @@ interface MeResponse {
   character: Character;
 }
 
+interface InventoryItem {
+  id: string;
+  user_id: string;
+  item_id: string;
+  purchased_at: string;
+}
+
+interface ShopItem {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 'ITEM' | 'THEME' | 'BADGE';
+  price: number;
+}
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   'http://localhost:4000';
@@ -41,6 +56,12 @@ function xpForLevel(level: number) {
 export default function CharacterPage() {
   const [data, setData] =
     useState<MeResponse | null>(null);
+
+  const [inventory, setInventory] =
+    useState<InventoryItem[]>([]);
+
+  const [shopItems, setShopItems] =
+    useState<ShopItem[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -59,24 +80,68 @@ export default function CharacterPage() {
         const token =
           await user.getIdToken();
 
-        const response =
-          await fetch(`${API_URL}/users/me`, {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          });
+        const [characterResponse, inventoryResponse, rewardsResponse] =
+          await Promise.all([
+            fetch(`${API_URL}/users/me`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }),
 
-        if (!response.ok) {
+            fetch(`${API_URL}/inventory`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }),
+
+            fetch(`${API_URL}/rewards`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }),
+          ]);
+
+        if (!characterResponse.ok) {
           throw new Error(
             'Failed to load character',
           );
         }
 
-        const result =
-          await response.json();
+        if (!inventoryResponse.ok) {
+          throw new Error(
+            'Failed to load inventory',
+          );
+        }
 
-        setData(result);
+        if (!rewardsResponse.ok) {
+          throw new Error(
+            'Failed to load reward items',
+          );
+        }
+
+        const characterResult =
+          await characterResponse.json();
+
+        const inventoryResult =
+          await inventoryResponse.json();
+
+        const rewardsResult =
+          await rewardsResponse.json();
+
+        setData(characterResult);
+
+        setInventory(
+          Array.isArray(inventoryResult)
+            ? inventoryResult
+            : inventoryResult.inventory ?? [],
+        );
+
+        setShopItems(
+          Array.isArray(rewardsResult)
+            ? rewardsResult
+            : rewardsResult.rewards ?? [],
+        );
+
       } catch (error) {
         console.error(error);
       } finally {
@@ -107,6 +172,14 @@ export default function CharacterPage() {
 
   const { character, user } = data;
 
+  const ownedItemIds = new Set(
+    inventory.map((item) => item.item_id),
+  );
+
+  const ownedItems = shopItems.filter((item) =>
+    ownedItemIds.has(item.id),
+  );
+
   const previousLevelXp =
     character.level <= 1
       ? 0
@@ -128,7 +201,7 @@ export default function CharacterPage() {
       0,
       (currentLevelProgress /
         levelXp) *
-        100,
+      100,
     ),
   );
 
@@ -284,20 +357,97 @@ export default function CharacterPage() {
             </div>
           </section>
 
-          {/* FUTURE EQUIPMENT */}
-          <section className="mt-6 rounded-3xl border border-dashed border-white/10 p-8 text-center">
+          {/* EQUIPMENT */}
+          <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.02] p-6">
 
-            <div className="text-4xl">
-              🛡️
+            <div className="mb-6 flex items-end justify-between">
+
+              <div>
+                <p className="text-xs font-bold tracking-[0.25em] text-purple-400">
+                  YOUR COLLECTION
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black">
+                  EQUIPMENT
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  Rewards you've unlocked from your journey.
+                </p>
+              </div>
+
+              <span className="text-xs font-bold text-gray-600">
+                {ownedItems.length} OWNED
+              </span>
+
             </div>
 
-            <p className="mt-3 text-sm font-bold text-gray-400">
-              EQUIPMENT SYSTEM
-            </p>
+            {ownedItems.length === 0 ? (
 
-            <p className="mt-1 text-xs text-gray-600">
-              Unlock equipment and cosmetics from the Reward Shop.
-            </p>
+              <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
+
+                <div className="text-4xl">
+                  🛡️
+                </div>
+
+                <p className="mt-3 text-sm font-bold text-gray-400">
+                  NO EQUIPMENT YET
+                </p>
+
+                <p className="mt-1 text-xs text-gray-600">
+                  Visit the Reward Shop to unlock your first cosmetic.
+                </p>
+
+              </div>
+
+            ) : (
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+                {ownedItems.map((item) => (
+
+                  <div
+                    key={item.id}
+                    className="group rounded-2xl border border-purple-400/20 bg-purple-400/[0.03] p-5 transition hover:-translate-y-1 hover:border-purple-400/40 hover:bg-purple-400/[0.06]"
+                  >
+
+                    <div className="flex items-start justify-between">
+
+                      <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-400/10 text-2xl">
+                        {item.type === 'BADGE'
+                          ? '🏆'
+                          : item.type === 'THEME'
+                            ? '🎨'
+                            : '✨'}
+                      </div>
+
+                      <span className="rounded-full border border-green-400/20 bg-green-400/10 px-2 py-1 text-[9px] font-black tracking-wider text-green-400">
+                        ✓ OWNED
+                      </span>
+
+                    </div>
+
+                    <p className="mt-5 text-[9px] font-bold tracking-[0.25em] text-purple-400">
+                      {item.type}
+                    </p>
+
+                    <h3 className="mt-1 text-lg font-black">
+                      {item.name}
+                    </h3>
+
+                    {item.description && (
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {item.description}
+                      </p>
+                    )}
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            )}
 
           </section>
 
