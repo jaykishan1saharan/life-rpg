@@ -55,37 +55,38 @@ export class QuestsRepository {
         return result.rows[0];
     }
 
+    // Only return quests that have NEVER been completed.
     async findAll(userId: string) {
         const result = await this.database.query(
             `
-    SELECT
-      q.id,
-      q.title,
-      q.description,
-      q.category,
-      q.difficulty,
-      q.attribute,
-      q.xp_reward,
-      q.gold_reward,
-      q.attribute_reward,
-      q.is_active,
-      q.created_at,
-      q.updated_at,
+      SELECT
+        q.id,
+        q.title,
+        q.description,
+        q.category,
+        q.difficulty,
+        q.attribute,
+        q.xp_reward,
+        q.gold_reward,
+        q.attribute_reward,
+        q.is_active,
+        q.created_at,
+        q.updated_at
 
-      EXISTS (
-        SELECT 1
-        FROM quest_completions qc
-        WHERE qc.quest_id = q.id
-          AND qc.user_id = $1
-          AND qc.completed_at::date = CURRENT_DATE
-      ) AS completed_today
+      FROM quests q
 
-    FROM quests q
-    WHERE q.user_id = $1
-      AND q.is_active = TRUE
+      WHERE q.user_id = $1
+        AND q.is_active = TRUE
 
-    ORDER BY q.created_at DESC
-    `,
+        AND NOT EXISTS (
+          SELECT 1
+          FROM quest_completions qc
+          WHERE qc.quest_id = q.id
+            AND qc.user_id = $1
+        )
+
+      ORDER BY q.created_at DESC
+      `,
             [userId],
         );
 
@@ -177,20 +178,20 @@ export class QuestsRepository {
         return result.rows[0] ?? null;
     }
 
-    async hasCompletedToday(
+    // Check whether this quest has EVER been completed.
+    async hasCompleted(
         client: import('pg').PoolClient,
         questId: string,
         userId: string,
     ) {
         const result = await client.query(
             `
-    SELECT id
-    FROM quest_completions
-    WHERE quest_id = $1
-      AND user_id = $2
-      AND completed_at::date = CURRENT_DATE
-    LIMIT 1
-    `,
+      SELECT id
+      FROM quest_completions
+      WHERE quest_id = $1
+        AND user_id = $2
+      LIMIT 1
+      `,
             [questId, userId],
         );
 
@@ -210,17 +211,17 @@ export class QuestsRepository {
     ) {
         const result = await client.query(
             `
-    INSERT INTO quest_completions (
-      quest_id,
-      user_id,
-      xp_earned,
-      gold_earned,
-      attribute,
-      attribute_points
-    )
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *
-    `,
+      INSERT INTO quest_completions (
+        quest_id,
+        user_id,
+        xp_earned,
+        gold_earned,
+        attribute,
+        attribute_points
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+      `,
             [
                 data.questId,
                 data.userId,
@@ -232,6 +233,39 @@ export class QuestsRepository {
         );
 
         return result.rows[0];
+    }
+
+    // Return completed quest history.
+    async findHistory(userId: string) {
+        const result = await this.database.query(
+            `
+      SELECT
+        qc.id AS completion_id,
+        qc.quest_id,
+        qc.xp_earned,
+        qc.gold_earned,
+        qc.attribute,
+        qc.attribute_points,
+        qc.completed_at,
+
+        q.title,
+        q.description,
+        q.category,
+        q.difficulty
+
+      FROM quest_completions qc
+
+      INNER JOIN quests q
+        ON q.id = qc.quest_id
+
+      WHERE qc.user_id = $1
+
+      ORDER BY qc.completed_at DESC
+      `,
+            [userId],
+        );
+
+        return result.rows;
     }
 
     async createActivityLog(
@@ -248,18 +282,18 @@ export class QuestsRepository {
     ) {
         const result = await client.query(
             `
-    INSERT INTO activity_logs (
-      user_id,
-      type,
-      title,
-      description,
-      xp_change,
-      gold_change,
-      metadata
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING *
-    `,
+      INSERT INTO activity_logs (
+        user_id,
+        type,
+        title,
+        description,
+        xp_change,
+        gold_change,
+        metadata
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+      `,
             [
                 data.userId,
                 data.type,

@@ -35,6 +35,10 @@ export class QuestsService {
         return this.questsRepository.findAll(userId);
     }
 
+    async history(userId: string) {
+        return this.questsRepository.findHistory(userId);
+    }
+
     async findOne(
         userId: string,
         questId: string,
@@ -123,7 +127,7 @@ export class QuestsService {
                 }
 
                 const alreadyCompleted =
-                    await this.questsRepository.hasCompletedToday(
+                    await this.questsRepository.hasCompleted(
                         client,
                         questId,
                         userId,

@@ -300,6 +300,10 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id
 CREATE INDEX IF NOT EXISTS idx_inventory_user_id
     ON inventory(user_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS
+idx_unique_quest_completion
+ON quest_completions (quest_id, user_id);
+
 
 -- ==========================================
 -- END OF LIFE RPG INITIAL SCHEMA

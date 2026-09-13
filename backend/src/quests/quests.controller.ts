@@ -55,6 +55,20 @@ export class QuestsController {
         );
     }
 
+    @Get('history')
+    async history(
+        @CurrentUser() user: any,
+    ) {
+        const userId =
+            await this.usersService.getInternalUserId(
+                user.uid,
+            );
+
+        return this.questsService.history(
+            userId,
+        );
+    }
+
     @Post(':id/complete')
     async complete(
         @CurrentUser() user: any,

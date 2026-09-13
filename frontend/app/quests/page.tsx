@@ -17,7 +17,6 @@ interface Quest {
   gold_reward: number;
   attribute_reward: number;
   is_active: boolean;
-  completed_today: boolean;
 }
 
 interface Character {
@@ -25,6 +24,20 @@ interface Character {
   total_xp: number;
   gold: number;
   current_streak: number;
+}
+
+interface QuestHistory {
+  completion_id: string;
+  quest_id: string;
+  xp_earned: number;
+  gold_earned: number;
+  attribute: string;
+  attribute_points: number;
+  completed_at: string;
+  title: string;
+  description: string | null;
+  category: string;
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD' | 'EPIC';
 }
 
 const API_URL =
@@ -39,14 +52,9 @@ const difficultyReward = {
 
 export default function QuestsPage() {
   const [quests, setQuests] = useState<Quest[]>([]);
+  const [history, setHistory] = useState<QuestHistory[]>([]);
 
-  const activeQuests = quests.filter(
-    (quest) => !quest.completed_today
-  );
-
-  const completedQuests = quests.filter(
-    (quest) => quest.completed_today
-  );
+  const activeQuests = quests;
 
   const [character, setCharacter] =
     useState<Character | null>(null);
@@ -82,28 +90,42 @@ export default function QuestsPage() {
 
       const token = await getToken();
 
-      const [questResponse, characterResponse] =
-        await Promise.all([
-          fetch(`${API_URL}/quests`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
+      const [
+        questResponse,
+        characterResponse,
+        historyResponse,
+      ] = await Promise.all([
+        fetch(`${API_URL}/quests`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
 
-          fetch(`${API_URL}/characters/me`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-        ]);
+        fetch(`${API_URL}/characters/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+
+        fetch(`${API_URL}/quests/history`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      ]);
 
       if (!questResponse.ok) {
         throw new Error('Failed to load quests');
       }
 
+      if (!historyResponse.ok) {
+        throw new Error('Failed to load quest history');
+      }
+
       const questData = await questResponse.json();
       const characterData =
         await characterResponse.json();
+      const historyData = await historyResponse.json();
 
       setQuests(
         Array.isArray(questData)
@@ -115,6 +137,13 @@ export default function QuestsPage() {
         characterData.character ??
         characterData,
       );
+
+      setHistory(
+        Array.isArray(historyData)
+          ? historyData
+          : historyData.history ?? [],
+      );
+
     } catch (error) {
       console.error(error);
     } finally {
@@ -358,10 +387,9 @@ export default function QuestsPage() {
                   </div>
                 )}
 
-                {/* COMPLETED TODAY */}
-                {completedQuests.length > 0 && (
+                {/* ADVENTURE LOG */}
+                {history.length > 0 && (
                   <section className="mt-12">
-
                     <div className="mb-5 flex items-end justify-between">
                       <div>
                         <p className="text-xs font-bold tracking-[0.3em] text-green-400">
@@ -369,68 +397,89 @@ export default function QuestsPage() {
                         </p>
 
                         <h2 className="mt-1 text-2xl font-black">
-                          COMPLETED TODAY
+                          QUEST HISTORY
                         </h2>
 
                         <p className="mt-1 text-sm text-gray-500">
-                          Victories already claimed today.
+                          Your completed missions and victories.
                         </p>
                       </div>
 
                       <span className="text-xs text-green-400/60">
-                        {completedQuests.length} completed
+                        {history.length} completed
                       </span>
                     </div>
 
-                    <div className="space-y-3">
-                      {completedQuests.map((quest) => (
-                        <div
-                          key={quest.id}
-                          className="rounded-2xl border border-green-400/10 bg-green-400/[0.02] p-5 opacity-70"
-                        >
-                          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="max-h-[520px] space-y-6 overflow-y-auto pr-2">
+                      {groupHistoryByDate(history).map(
+                        (group) => (
+                          <div key={group.date}>
+                            <div className="mb-3 flex items-center gap-3">
+                              <div className="h-px flex-1 bg-white/10" />
 
-                            <div className="min-w-0">
-                              <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-wider">
-                                <span className="rounded-md border border-green-400/20 bg-green-400/5 px-2 py-1 text-green-400">
-                                  ✓ COMPLETED
-                                </span>
+                              <span className="text-[10px] font-black tracking-[0.2em] text-gray-500">
+                                {group.label}
+                              </span>
 
-                                <span className="text-gray-600">
-                                  {quest.category}
-                                </span>
-
-                                <span className="text-green-400/70">
-                                  • {quest.attribute}
-                                </span>
-                              </div>
-
-                              <h3 className="text-lg font-black text-gray-300">
-                                {quest.title}
-                              </h3>
-
-                              {quest.description && (
-                                <p className="mt-1 text-sm text-gray-600">
-                                  {quest.description}
-                                </p>
-                              )}
+                              <div className="h-px flex-1 bg-white/10" />
                             </div>
 
-                            <div className="shrink-0 text-right">
-                              <p className="text-sm font-black text-cyan-400/70">
-                                +{quest.xp_reward} XP
-                              </p>
+                            <div className="space-y-3">
+                              {group.quests.map((quest) => (
+                                <div
+                                  key={quest.completion_id}
+                                  className="rounded-2xl border border-green-400/10 bg-green-400/[0.02] p-5 opacity-75"
+                                >
+                                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="min-w-0">
+                                      <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-wider">
+                                        <span className="rounded-md border border-green-400/20 bg-green-400/5 px-2 py-1 text-green-400">
+                                          ✓ COMPLETED
+                                        </span>
 
-                              <p className="text-xs font-bold text-yellow-400/70">
-                                +{quest.gold_reward} Gold
-                              </p>
+                                        <span className="text-gray-600">
+                                          {quest.category}
+                                        </span>
+
+                                        <span className="text-green-400/70">
+                                          • {quest.attribute}
+                                        </span>
+                                      </div>
+
+                                      <h3 className="text-lg font-black text-gray-300">
+                                        {quest.title}
+                                      </h3>
+
+                                      {quest.description && (
+                                        <p className="mt-1 text-sm text-gray-600">
+                                          {quest.description}
+                                        </p>
+                                      )}
+
+                                      <p className="mt-2 text-[10px] text-gray-700">
+                                        {formatCompletionTime(
+                                          quest.completed_at,
+                                        )}
+                                      </p>
+                                    </div>
+
+                                    <div className="shrink-0 text-right">
+                                      <p className="text-sm font-black text-cyan-400/70">
+                                        +{quest.xp_earned} XP
+                                      </p>
+
+                                      <p className="text-xs font-bold text-yellow-400/70">
+                                        +{quest.gold_earned} Gold
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-
                           </div>
-                        </div>
-                      ))}
+                        ),
+                      )}
                     </div>
-
                   </section>
                 )}
               </>
@@ -583,6 +632,88 @@ export default function QuestsPage() {
       )}
     </AppShell>
   );
+}
+
+function formatDateKey(dateString: string) {
+  const date = new Date(dateString);
+
+  return date.toLocaleDateString('en-CA');
+}
+
+function formatDateLabel(dateString: string) {
+  const date = new Date(dateString);
+
+  const today = new Date();
+  const yesterday = new Date();
+
+  yesterday.setDate(today.getDate() - 1);
+
+  const dateKey = formatDateKey(dateString);
+  const todayKey = formatDateKey(today.toISOString());
+  const yesterdayKey = formatDateKey(
+    yesterday.toISOString(),
+  );
+
+  if (dateKey === todayKey) {
+    return 'TODAY';
+  }
+
+  if (dateKey === yesterdayKey) {
+    return 'YESTERDAY';
+  }
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).toUpperCase();
+}
+
+function formatCompletionTime(dateString: string) {
+  return new Date(dateString).toLocaleTimeString(
+    'en-US',
+    {
+      hour: 'numeric',
+      minute: '2-digit',
+    },
+  );
+}
+
+function groupHistoryByDate(
+  history: QuestHistory[],
+) {
+  const groups: {
+    date: string;
+    label: string;
+    quests: QuestHistory[];
+  }[] = [];
+
+  for (const quest of history) {
+    const date = formatDateKey(
+      quest.completed_at,
+    );
+
+    let group = groups.find(
+      (item) => item.date === date,
+    );
+
+    if (!group) {
+      group = {
+        date,
+        label: formatDateLabel(
+          quest.completed_at,
+        ),
+        quests: [],
+      };
+
+      groups.push(group);
+    }
+
+    group.quests.push(quest);
+  }
+
+  return groups;
 }
 
 function QuestCard({
