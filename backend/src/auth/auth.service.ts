@@ -6,8 +6,6 @@ import {
   getApps,
   initializeApp,
 } from 'firebase-admin/app';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 
 @Injectable()
 export class AuthService {
@@ -17,30 +15,50 @@ export class AuthService {
   constructor() {
     const apps = getApps();
 
-    if (apps.length === 0) {
-      const serviceAccountPath = resolve(
-        process.cwd(),
-        'firebase',
-        'service-account.json',
-      );
+    if (apps.length > 0) {
+      this.firebaseApp = apps[0];
+    } else {
+      const projectId =
+        process.env.FIREBASE_PROJECT_ID;
 
-      const serviceAccount = JSON.parse(
-        readFileSync(serviceAccountPath, 'utf-8'),
-      );
+      const clientEmail =
+        process.env.FIREBASE_CLIENT_EMAIL;
+
+      const privateKey =
+        process.env.FIREBASE_PRIVATE_KEY?.replace(
+          /\\n/g,
+          '\n',
+        );
+
+      if (
+        !projectId ||
+        !clientEmail ||
+        !privateKey
+      ) {
+        throw new Error(
+          'Firebase Admin environment variables are not configured',
+        );
+      }
 
       this.firebaseApp = initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
       });
-    } else {
-      this.firebaseApp = apps[0];
     }
 
-    this.firebaseAuth = getAuth(this.firebaseApp);
+    this.firebaseAuth = getAuth(
+      this.firebaseApp,
+    );
   }
 
   async verifyToken(token: string) {
     try {
-      return await this.firebaseAuth.verifyIdToken(token);
+      return await this.firebaseAuth.verifyIdToken(
+        token,
+      );
     } catch {
       throw new UnauthorizedException(
         'Invalid or expired authentication token',
