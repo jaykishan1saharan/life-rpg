@@ -18,23 +18,12 @@ export class AuthService {
     if (apps.length > 0) {
       this.firebaseApp = apps[0];
     } else {
-      const projectId =
-        process.env.FIREBASE_PROJECT_ID;
-
-      const clientEmail =
-        process.env.FIREBASE_CLIENT_EMAIL;
-
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
       const privateKey =
-        process.env.FIREBASE_PRIVATE_KEY?.replace(
-          /\\n/g,
-          '\n',
-        );
+        process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-      if (
-        !projectId ||
-        !clientEmail ||
-        !privateKey
-      ) {
+      if (!projectId || !clientEmail || !privateKey) {
         throw new Error(
           'Firebase Admin environment variables are not configured',
         );
@@ -49,16 +38,12 @@ export class AuthService {
       });
     }
 
-    this.firebaseAuth = getAuth(
-      this.firebaseApp,
-    );
+    this.firebaseAuth = getAuth(this.firebaseApp);
   }
 
   async verifyToken(token: string) {
     try {
-      return await this.firebaseAuth.verifyIdToken(
-        token,
-      );
+      return await this.firebaseAuth.verifyIdToken(token);
     } catch {
       throw new UnauthorizedException(
         'Invalid or expired authentication token',
