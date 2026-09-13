@@ -4,7 +4,7 @@
 
 Life RPG is a full-stack web application that transforms everyday activities and personal goals into an RPG-style experience. Users can create and complete quests, earn XP and gold, increase their character attributes, maintain streaks, unlock levels, and spend earned gold on rewards.
 
-The project combines a modern **Next.js frontend**, **NestJS backend**, **PostgreSQL database**, and **Firebase Authentication** to provide a simple but engaging productivity experience.
+The project combines a modern **Next.js frontend**, **NestJS backend**, **PostgreSQL database**, and **Firebase Authentication** to provide a simple, interactive, and engaging productivity experience.
 
 ---
 
@@ -36,7 +36,7 @@ The project combines a modern **Next.js frontend**, **NestJS backend**, **Postgr
   * Epic
 * Assign an attribute to each quest
 * Complete quests and receive rewards
-* Prevent repeated completion of the same quest within the daily flow
+* Track completed quests
 
 ### ⭐ XP & Leveling
 
@@ -49,7 +49,7 @@ The RPG engine calculates level progression from accumulated XP.
 | Hard       | 100 |   20 |
 | Epic       | 200 |   40 |
 
-The XP requirement is calculated using:
+XP requirement:
 
 ```text
 XP Required = floor(100 × level^1.5)
@@ -59,7 +59,9 @@ When enough XP is earned, the character automatically levels up.
 
 ### 🪙 Rewards & Shop
 
-Users can spend earned gold on unlockable rewards such as:
+Users can spend earned gold on unlockable rewards.
+
+Examples include:
 
 * Neon Aura
 * Cyber Knight
@@ -67,7 +69,7 @@ Users can spend earned gold on unlockable rewards such as:
 * Legendary Crown
 * Void Walker
 
-Rewards can belong to different types:
+Rewards can belong to:
 
 * `ITEM`
 * `THEME`
@@ -82,6 +84,75 @@ Purchased rewards are stored in the user's inventory and can be viewed through t
 The application uses **Firebase Authentication**.
 
 Authenticated requests use a Firebase ID token which is verified by the NestJS backend before protected API operations are performed.
+
+---
+
+# 🎬 Animation & Interactive Effects
+
+Life RPG uses subtle animations to make the application feel more like a real RPG while keeping the interface clean and user-friendly.
+
+### ✨ Page Animations
+
+* Smooth page and section transitions
+* Fade-in effects when content loads
+* Slide-in animations for cards and panels
+* Smooth navigation between application sections
+
+### ⚔️ Quest Animations
+
+* Quest cards animate when appearing
+* Hover effects on quest cards
+* Interactive difficulty badges
+* Smooth completion feedback
+* Button hover and press animations
+
+### ⭐ XP & Level-Up Effects
+
+* Animated XP progress bar
+* Smooth XP counter updates
+* Visual feedback after completing a quest
+* Level-up animation when the required XP is reached
+* Progress indicators animate smoothly
+
+### 🪙 Gold Animations
+
+* Animated gold counter updates
+* Smooth reward feedback after completing quests
+* Shop purchase interaction effects
+
+### 🧙 Character Animations
+
+* Character cards use subtle hover effects
+* Attribute/progress bars animate smoothly
+* Interactive character statistics
+* Level and progression indicators animate on updates
+
+### 🎁 Shop & Inventory Effects
+
+* Reward cards have hover animations
+* Purchase buttons provide interactive feedback
+* Inventory items appear with smooth transitions
+* Reward unlocks use visual feedback
+
+### 🎯 Micro-interactions
+
+Small animations are used throughout the interface for:
+
+```text
+Hover
+  ↓
+Button Interaction
+  ↓
+Quest Completion
+  ↓
+XP / Gold Update
+  ↓
+Progress Animation
+  ↓
+Level-Up Feedback
+```
+
+The animations are intentionally kept **minimal and functional** so they improve usability instead of distracting the user.
 
 ---
 
@@ -185,7 +256,7 @@ NestJS REST API
 PostgreSQL Database
 ```
 
-### Basic user flow
+### Basic User Flow
 
 ```text
 Register / Login
@@ -211,7 +282,7 @@ Track Progress & Streaks
 
 # 🚀 Getting Started
 
-## 1. Clone the repository
+## 1. Clone the Repository
 
 ```bash
 git clone https://github.com/YOUR-USERNAME/life-rpg.git
@@ -222,15 +293,13 @@ cd life-rpg
 
 # 🔥 Firebase Setup
 
-Create a Firebase project from:
+Create a Firebase project:
 
 https://console.firebase.google.com/
 
 Enable **Firebase Authentication** and configure the required authentication provider.
 
 The frontend requires Firebase configuration.
-
-Create the appropriate frontend environment file according to the Firebase configuration used by the project.
 
 The backend also requires Firebase Admin credentials.
 
@@ -240,7 +309,7 @@ The backend also requires Firebase Admin credentials.
 
 The backend uses PostgreSQL.
 
-Create a PostgreSQL database and run the migrations in order:
+Run the migrations in order:
 
 ```text
 backend/migrations/001_initial_schema.sql
@@ -257,7 +326,7 @@ The second migration inserts the default shop rewards.
 
 Inside the `backend` directory, create a `.env` file.
 
-Use `.env.example` as the reference:
+Example:
 
 ```env
 PORT=4000
@@ -282,7 +351,7 @@ Start the development server:
 npm run start:dev
 ```
 
-The backend runs on:
+Backend:
 
 ```text
 http://localhost:4000
@@ -299,7 +368,7 @@ cd frontend
 npm install
 ```
 
-Configure the API URL used by the frontend:
+Configure the API URL:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -321,26 +390,26 @@ http://localhost:3000
 
 # 🧪 Testing
 
-### Backend tests
+### Backend Tests
 
 ```bash
 cd backend
 npm test
 ```
 
-### Backend test coverage
+### Test Coverage
 
 ```bash
 npm run test:cov
 ```
 
-### End-to-end tests
+### End-to-End Tests
 
 ```bash
 npm run test:e2e
 ```
 
-### Frontend lint
+### Frontend Lint
 
 ```bash
 cd frontend
@@ -350,8 +419,6 @@ npm run lint
 ---
 
 # 🔌 API Overview
-
-The backend provides protected REST endpoints for the main application functionality.
 
 ### Users
 
@@ -391,8 +458,6 @@ Protected endpoints require a valid Firebase authentication token.
 
 # 🗃️ Database Design
 
-The PostgreSQL database contains the following major tables:
-
 ### `users`
 
 Stores application user information and Firebase UID.
@@ -417,7 +482,7 @@ Stores user-created quests and their rewards.
 
 ### `quest_completions`
 
-Stores completed quests and the rewards earned from them.
+Stores completed quests and rewards earned.
 
 ### `activity_logs`
 
@@ -437,17 +502,13 @@ Stores rewards purchased by users.
 
 The RPG engine is implemented in the backend.
 
-### Level calculation
+### Level Calculation
 
 ```text
 Level XP = floor(100 × level^1.5)
 ```
 
-For example, the system progressively increases the XP required for higher levels.
-
-### Quest rewards
-
-Quest difficulty determines the default reward:
+### Quest Rewards
 
 ```text
 EASY    → 25 XP + 5 Gold
@@ -476,11 +537,12 @@ This project was developed collaboratively by two team members.
 * Dashboard implementation
 * Quest creation and completion interface
 * Character/progression interface
-* Login and registration flow integration
-* Firebase Authentication integration on the frontend
-* API service integration between frontend and backend
-* Responsive UI and user experience
-* RPG dashboard interactions and animations
+* Login and registration flow
+* Firebase Authentication integration
+* Frontend API integration
+* Responsive UI/UX development
+* Animation and micro-interaction implementation
+* XP and progression visualizations
 * Frontend testing and debugging
 * Overall project integration
 
@@ -511,26 +573,27 @@ This project was developed collaboratively by two team members.
 
 # 🤝 Collaboration
 
-The project was developed as a collaborative full-stack application where both members contributed to different layers of the system.
+The project was developed collaboratively with responsibilities divided across frontend and backend development.
 
 ```text
-                 LIFE RPG
-                    │
-        ┌───────────┴───────────┐
-        │                       │
-   MANISH SHINDE          JAYKISHAN SAHARAN
-        │                       │
-   Frontend / UI            Backend / API
-        │                       │
-   Next.js                  NestJS
-   React                    PostgreSQL
-   Firebase Client          Firebase Admin
-   UI/UX                     RPG Engine
-   API Integration           Rewards
-        │                       │
-        └───────────┬───────────┘
-                    │
-             Full-Stack System
+                     LIFE RPG
+                        │
+          ┌─────────────┴─────────────┐
+          │                           │
+     MANISH SHINDE              JAYKISHAN SAHARAN
+          │                           │
+   Frontend Development         Backend Development
+          │                           │
+       Next.js                     NestJS
+       React                    PostgreSQL
+       TypeScript             Firebase Admin
+       Tailwind CSS             REST APIs
+       Framer Motion              RPG Engine
+       Firebase Client             Rewards
+          │                           │
+          └─────────────┬─────────────┘
+                        │
+                  Full-Stack App
 ```
 
 ---
@@ -546,9 +609,7 @@ The project was developed as a collaborative full-stack application where both m
 
 ---
 
-# 📌 Future Improvements
-
-Possible future enhancements include:
+# 🚀 Future Improvements
 
 * Daily quest recommendations
 * Achievement system
@@ -566,21 +627,27 @@ Possible future enhancements include:
 
 # 🎯 Project Goal
 
-Life RPG aims to make personal productivity more engaging by combining **real-world goals with RPG mechanics**.
+Life RPG makes personal productivity more engaging by combining **real-world goals with RPG mechanics**.
 
-Instead of simply checking tasks off a list, users can:
+Instead of simply checking tasks off a list:
 
-> **Complete real-life tasks → Earn XP → Improve attributes → Level up → Earn gold → Unlock rewards.**
+```text
+Complete Real-Life Tasks
+          ↓
+        Earn XP
+          ↓
+    Improve Attributes
+          ↓
+       Level Up
+          ↓
+      Earn Gold
+          ↓
+    Unlock Rewards
+          ↓
+     Build Better Habits
+```
 
-The goal is to encourage consistency, motivation, and personal growth through a simple gamified experience.
-
----
-
-# 📄 License
-
-This project is developed as an academic/project implementation.
-
-All rights reserved to the project contributors unless otherwise specified.
+> **Your life is the game. Your goals are the quests.**
 
 ---
 
@@ -596,4 +663,4 @@ GitHub: [@jaykishan1saharan](https://github.com/jaykishan1saharan)
 
 ---
 
-⭐ **If you like the project, consider giving it a star!**
+⭐ **If you like Life RPG, consider giving the repository a star!**
