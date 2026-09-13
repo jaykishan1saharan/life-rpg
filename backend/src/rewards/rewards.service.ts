@@ -44,9 +44,4 @@ export class RewardsService {
     }
   }
 
-  async getInventory(userId: string) {
-    return this.repository.getInventory(
-      userId,
-    );
-  }
 }

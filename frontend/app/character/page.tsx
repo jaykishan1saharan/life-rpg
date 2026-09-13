@@ -34,7 +34,14 @@ interface InventoryItem {
   id: string;
   user_id: string;
   item_id: string;
+  is_equipped: boolean;
   purchased_at: string;
+
+  name?: string;
+  description?: string | null;
+  type?: 'ITEM' | 'THEME' | 'BADGE';
+  price?: number;
+  image_url?: string | null;
 }
 
 interface ShopItem {
@@ -151,6 +158,65 @@ export default function CharacterPage() {
 
     loadCharacter();
   }, []);
+
+  async function handleEquip(itemId: string) {
+    try {
+      const user = getAuth(app).currentUser;
+
+      if (!user) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const token = await user.getIdToken();
+
+      const response = await fetch(
+        `${API_URL}/inventory/${itemId}/equip`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || 'Failed to equip item',
+        );
+      }
+
+      // Reload inventory from backend
+      const inventoryResponse = await fetch(
+        `${API_URL}/inventory`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (!inventoryResponse.ok) {
+        throw new Error(
+          'Failed to refresh inventory',
+        );
+      }
+
+      const inventoryResult =
+        await inventoryResponse.json();
+
+      setInventory(
+        Array.isArray(inventoryResult)
+          ? inventoryResult
+          : inventoryResult.inventory ?? [],
+      );
+
+    } catch (error) {
+      console.error('Equip error:', error);
+    }
+  }
 
   if (loading) {
     return (
@@ -357,96 +423,114 @@ export default function CharacterPage() {
             </div>
           </section>
 
-          {/* EQUIPMENT */}
+          {/* YOUR COLLECTION */}
           <section className="mt-6 rounded-3xl border border-white/10 bg-white/[0.02] p-6">
 
-            <div className="mb-6 flex items-end justify-between">
+            <div className="mb-6">
+              <p className="text-xs tracking-[0.25em] text-cyan-400">
+                INVENTORY
+              </p>
 
-              <div>
-                <p className="text-xs font-bold tracking-[0.25em] text-purple-400">
-                  YOUR COLLECTION
-                </p>
+              <h2 className="mt-1 text-2xl font-black">
+                YOUR COLLECTION
+              </h2>
 
-                <h2 className="mt-1 text-2xl font-black">
-                  EQUIPMENT
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-600">
-                  Rewards you've unlocked from your journey.
-                </p>
-              </div>
-
-              <span className="text-xs font-bold text-gray-600">
-                {ownedItems.length} OWNED
-              </span>
-
+              <p className="mt-1 text-sm text-gray-600">
+                Equip your rewards and customize your character.
+              </p>
             </div>
 
             {ownedItems.length === 0 ? (
-
-              <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center">
-
+              <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
                 <div className="text-4xl">
-                  🛡️
+                  🎒
                 </div>
 
                 <p className="mt-3 text-sm font-bold text-gray-400">
-                  NO EQUIPMENT YET
+                  INVENTORY EMPTY
                 </p>
 
                 <p className="mt-1 text-xs text-gray-600">
-                  Visit the Reward Shop to unlock your first cosmetic.
+                  Visit the Reward Shop to unlock your first item.
                 </p>
-
               </div>
-
             ) : (
-
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-                {ownedItems.map((item) => (
+                {ownedItems.map((item) => {
 
-                  <div
-                    key={item.id}
-                    className="group rounded-2xl border border-purple-400/20 bg-purple-400/[0.03] p-5 transition hover:-translate-y-1 hover:border-purple-400/40 hover:bg-purple-400/[0.06]"
-                  >
+                  const inventoryItem =
+                    inventory.find(
+                      (inventoryItem) =>
+                        inventoryItem.item_id === item.id,
+                    );
 
-                    <div className="flex items-start justify-between">
+                  const equipped =
+                    inventoryItem?.is_equipped ?? false;
 
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-purple-400/20 bg-purple-400/10 text-2xl">
-                        {item.type === 'BADGE'
-                          ? '🏆'
-                          : item.type === 'THEME'
-                            ? '🎨'
-                            : '✨'}
+                  const icon =
+                    item.type === 'THEME'
+                      ? '🎨'
+                      : item.type === 'BADGE'
+                        ? '🏆'
+                        : '⚔️';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-2xl border p-5 transition ${equipped
+                          ? 'border-cyan-400/40 bg-cyan-400/10 shadow-[0_0_30px_rgba(34,211,238,0.08)]'
+                          : 'border-white/10 bg-black/20 hover:border-cyan-400/20'
+                        }`}
+                    >
+
+                      <div className="flex items-start justify-between">
+
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-2xl">
+                          {icon}
+                        </div>
+
+                        {equipped && (
+                          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[9px] font-black tracking-wider text-cyan-400">
+                            ✓ EQUIPPED
+                          </span>
+                        )}
+
                       </div>
 
-                      <span className="rounded-full border border-green-400/20 bg-green-400/10 px-2 py-1 text-[9px] font-black tracking-wider text-green-400">
-                        ✓ OWNED
-                      </span>
+                      <h3 className="mt-4 font-black text-white">
+                        {item.name}
+                      </h3>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {item.description ||
+                          'A mysterious reward.'}
+                      </p>
+
+                      <div className="mt-4 flex items-center justify-between">
+
+                        <span className="text-[10px] font-bold tracking-wider text-gray-600">
+                          {item.type}
+                        </span>
+
+                        {!equipped && inventoryItem && (
+                          <button
+                            onClick={() =>
+                              handleEquip(item.id)
+                            }
+                            className="rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-400 transition hover:bg-cyan-400/20"
+                          >
+                            EQUIP
+                          </button>
+                        )}
+
+                      </div>
 
                     </div>
-
-                    <p className="mt-5 text-[9px] font-bold tracking-[0.25em] text-purple-400">
-                      {item.type}
-                    </p>
-
-                    <h3 className="mt-1 text-lg font-black">
-                      {item.name}
-                    </h3>
-
-                    {item.description && (
-                      <p className="mt-1 text-xs leading-5 text-gray-500">
-                        {item.description}
-                      </p>
-                    )}
-
-                  </div>
-
-                ))}
+                  );
+                })}
 
               </div>
-
             )}
 
           </section>

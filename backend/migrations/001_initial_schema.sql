@@ -308,3 +308,7 @@ ON quest_completions (quest_id, user_id);
 -- ==========================================
 -- END OF LIFE RPG INITIAL SCHEMA
 -- ==========================================
+
+
+ALTER TABLE inventory
+ADD COLUMN IF NOT EXISTS is_equipped BOOLEAN NOT NULL DEFAULT FALSE;

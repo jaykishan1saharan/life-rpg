@@ -58,31 +58,6 @@ export class RewardsRepository {
     return result.rows[0] ?? null;
   }
 
-  async getInventory(userId: string) {
-    const result = await this.database.query(
-      `
-      SELECT
-        i.id,
-        i.purchased_at,
-        s.id AS item_id,
-        s.name,
-        s.description,
-        s.type,
-        s.price,
-        s.image_url,
-        s.metadata
-      FROM inventory i
-      INNER JOIN shop_items s
-        ON s.id = i.item_id
-      WHERE i.user_id = $1
-      ORDER BY i.purchased_at DESC
-      `,
-      [userId],
-    );
-
-    return result.rows;
-  }
-
   async purchase(
     userId: string,
     itemId: string,

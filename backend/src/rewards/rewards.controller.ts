@@ -41,17 +41,4 @@ export class RewardsController {
     );
   }
 
-  @Get('inventory')
-  async getInventory(
-    @CurrentUser() user: any,
-  ) {
-    const userId =
-      await this.usersService.getInternalUserId(
-        user.uid,
-      );
-
-    return this.rewardsService.getInventory(
-      userId,
-    );
-  }
 }

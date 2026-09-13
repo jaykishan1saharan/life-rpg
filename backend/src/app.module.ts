@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module.js';
 import { QuestsModule } from './quests/quests.module.js';
 import { RpgModule } from './rpg/rpg.module.js';
 import { RewardsModule } from './rewards/rewards.module.js';
+import { InventoryModule } from './inventory/inventory.module.js';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -23,6 +24,7 @@ import { AppService } from './app.service.js';
     QuestsModule,
     RpgModule,
     RewardsModule,
+    InventoryModule,
   ],
 
   controllers: [
