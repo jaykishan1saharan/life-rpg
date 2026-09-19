@@ -20,6 +20,11 @@ const navigation = [
     icon: '🧙',
   },
   {
+    label: 'Water',
+    href: '/hydration',
+    icon: '💧',
+  },
+  {
     label: 'Shop',
     href: '/shop',
     icon: '🛒',
@@ -30,17 +35,18 @@ export default function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#07070d]/95 px-2 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-xl lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#07070d]/95 px-1 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur-xl lg:hidden">
       <div className="mx-auto flex max-w-lg items-center justify-around">
         {navigation.map((item) => {
           const active =
-            pathname === item.href;
+            pathname === item.href ||
+            pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`relative flex min-w-[70px] flex-col items-center gap-1 rounded-xl px-3 py-2 transition ${
+              className={`relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 transition ${
                 active
                   ? 'text-cyan-300'
                   : 'text-gray-600'
@@ -60,7 +66,7 @@ export default function MobileNav() {
                 {item.icon}
               </span>
 
-              <span className="text-[9px] font-bold tracking-wider">
+              <span className="text-[8px] font-bold tracking-wider sm:text-[9px]">
                 {item.label}
               </span>
             </Link>

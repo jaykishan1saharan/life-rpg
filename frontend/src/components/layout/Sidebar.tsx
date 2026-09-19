@@ -25,6 +25,11 @@ const navigation = [
     icon: '🧙',
   },
   {
+    label: 'Hydration',
+    href: '/hydration',
+    icon: '💧',
+  },
+  {
     label: 'Reward Shop',
     href: '/shop',
     icon: '🛒',
@@ -65,7 +70,6 @@ export default function Sidebar({
         </div>
       </Link>
 
-
       {/* NAVIGATION */}
       <nav className="space-y-1">
         <p className="mb-3 px-3 text-[9px] font-bold tracking-[0.3em] text-gray-600">
@@ -74,7 +78,8 @@ export default function Sidebar({
 
         {navigation.map((item) => {
           const active =
-            pathname === item.href;
+            pathname === item.href ||
+            pathname.startsWith(`${item.href}/`);
 
           return (
             <Link

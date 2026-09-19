@@ -8,7 +8,9 @@ import { QuestsModule } from './quests/quests.module.js';
 import { RpgModule } from './rpg/rpg.module.js';
 import { RewardsModule } from './rewards/rewards.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
+import { HydrationModule } from './hydration/hydration.module.js';
 
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -18,6 +20,8 @@ import { AppService } from './app.service.js';
       isGlobal: true,
     }),
 
+    ScheduleModule.forRoot(),
+
     DatabaseModule,
     AuthModule,
     UsersModule,
@@ -25,6 +29,7 @@ import { AppService } from './app.service.js';
     RpgModule,
     RewardsModule,
     InventoryModule,
+    HydrationModule,
   ],
 
   controllers: [
