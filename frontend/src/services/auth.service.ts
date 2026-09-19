@@ -1,6 +1,8 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   GoogleAuthProvider,
+  linkWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -50,6 +52,37 @@ export async function loginWithGoogle(): Promise<User> {
   );
 
   return credential.user;
+}
+
+/**
+ * Links Email/Password authentication to the
+ * currently signed-in Firebase user.
+ *
+ * This keeps the same Firebase UID.
+ */
+export async function linkEmailPassword(
+  email: string,
+  password: string,
+): Promise<User> {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error(
+      'You must sign in with Google before setting an email password.',
+    );
+  }
+
+  const credential = EmailAuthProvider.credential(
+    email,
+    password,
+  );
+
+  const linkedCredential = await linkWithCredential(
+    currentUser,
+    credential,
+  );
+
+  return linkedCredential.user;
 }
 
 export async function logout(): Promise<void> {
