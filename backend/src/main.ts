@@ -14,9 +14,12 @@ async function bootstrap() {
     configService.get<number>('PORT') || 4000;
 
   app.enableCors({
-    origin:
-      configService.get<string>('FRONTEND_URL') ||
+    origin: [
       'http://localhost:3000',
+      'https://life-rpg-beige-three.vercel.app',
+      'https://localhost',
+      'capacitor://localhost',
+    ],
     credentials: true,
   });
 
