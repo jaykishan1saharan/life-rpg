@@ -32,26 +32,26 @@ export class PushNotificationService {
     const message: Message = {
       token,
 
-      /*
-       * IMPORTANT:
-       * Do NOT send the notification object here.
-       *
-       * We use a DATA-ONLY message so that:
-       *
-       * App open
-       *     -> Firebase onMessage()
-       *     -> In-screen hydration popup
-       *
-       * App/background
-       *     -> Service Worker
-       *     -> System notification
-       */
+      // DATA payload
       data: {
         title,
         body,
         ...(data ?? {}),
       },
 
+      // ANDROID notification
+      android: {
+        priority: 'high',
+
+        notification: {
+          title,
+          body,
+          channelId: 'hydration',
+          sound: 'default',
+        },
+      },
+
+      // WEB notification behavior
       webpush: {
         fcmOptions: {
           link: '/hydration',
