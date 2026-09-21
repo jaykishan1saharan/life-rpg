@@ -1,9 +1,15 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 
 export default function Home() {
+
+    useEffect(() => {
+        alert('ROOT PAGE LOADED');
+    }, []);
+
     return (
         <main className="relative min-h-screen overflow-hidden bg-[#050508] text-white">
 

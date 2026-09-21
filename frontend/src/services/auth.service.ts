@@ -12,59 +12,130 @@ import {
 
 import { auth } from '../lib/firebase';
 
-const googleProvider = new GoogleAuthProvider();
+import { Capacitor } from '@capacitor/core';
+import {
+  FirebaseAuthentication,
+} from '@capacitor-firebase/authentication';
+
+const googleProvider =
+  new GoogleAuthProvider();
+
+const isNative =
+  Capacitor.isNativePlatform();
+
+/* =====================================================
+   REGISTER
+===================================================== */
 
 export async function registerWithEmail(
   name: string,
   email: string,
   password: string,
-): Promise<User> {
-  const credential = await createUserWithEmailAndPassword(
-    auth,
-    email,
-    password,
-  );
+): Promise<any> {
 
-  await updateProfile(credential.user, {
-    displayName: name,
-  });
+  if (isNative) {
+    const result =
+      await FirebaseAuthentication
+        .createUserWithEmailAndPassword({
+          email,
+          password,
+        });
+
+    return result.user;
+  }
+
+  const credential =
+    await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+
+  await updateProfile(
+    credential.user,
+    {
+      displayName: name,
+    },
+  );
 
   return credential.user;
 }
+
+/* =====================================================
+   LOGIN
+===================================================== */
 
 export async function loginWithEmail(
   email: string,
   password: string,
-): Promise<User> {
-  const credential = await signInWithEmailAndPassword(
-    auth,
-    email,
-    password,
-  );
+): Promise<any> {
+
+  if (isNative) {
+    const result =
+      await FirebaseAuthentication
+        .signInWithEmailAndPassword({
+          email,
+          password,
+        });
+
+    return result.user;
+  }
+
+  const credential =
+    await signInWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
 
   return credential.user;
 }
 
-export async function loginWithGoogle(): Promise<User> {
-  const credential = await signInWithPopup(
-    auth,
-    googleProvider,
-  );
+/* =====================================================
+   GOOGLE LOGIN
+===================================================== */
+
+export async function loginWithGoogle(): Promise<any> {
+
+  if (isNative) {
+    const result =
+      await FirebaseAuthentication
+        .signInWithGoogle();
+
+    return result.user;
+  }
+
+  const credential =
+    await signInWithPopup(
+      auth,
+      googleProvider,
+    );
 
   return credential.user;
 }
 
-/**
- * Links Email/Password authentication to the
- * currently signed-in Firebase user.
- *
- * This keeps the same Firebase UID.
- */
+/* =====================================================
+   LINK EMAIL + PASSWORD
+===================================================== */
+
 export async function linkEmailPassword(
   email: string,
   password: string,
-): Promise<User> {
-  const currentUser = auth.currentUser;
+): Promise<any> {
+
+  if (isNative) {
+    const result =
+      await FirebaseAuthentication
+        .linkWithEmailAndPassword({
+          email,
+          password,
+        });
+
+    return result.user;
+  }
+
+  const currentUser =
+    auth.currentUser;
 
   if (!currentUser) {
     throw new Error(
@@ -72,19 +143,33 @@ export async function linkEmailPassword(
     );
   }
 
-  const credential = EmailAuthProvider.credential(
-    email,
-    password,
-  );
+  const credential =
+    EmailAuthProvider.credential(
+      email,
+      password,
+    );
 
-  const linkedCredential = await linkWithCredential(
-    currentUser,
-    credential,
-  );
+  const linkedCredential =
+    await linkWithCredential(
+      currentUser,
+      credential,
+    );
 
   return linkedCredential.user;
 }
 
+/* =====================================================
+   LOGOUT
+===================================================== */
+
 export async function logout(): Promise<void> {
+
+  if (isNative) {
+    await FirebaseAuthentication
+      .signOut();
+
+    return;
+  }
+
   await signOut(auth);
 }

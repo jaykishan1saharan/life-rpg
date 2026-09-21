@@ -9,12 +9,11 @@ import {
 
 import { motion, AnimatePresence } from 'framer-motion';
 
-import {
-    onAuthStateChanged,
-    User,
-} from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
 
-import { auth } from '../../src/lib/firebase';
+import {
+    FirebaseAuthentication,
+} from '@capacitor-firebase/authentication';
 import { apiRequest } from '../../src/services/api.service';
 
 import AppShell from '../../src/components/layout/AppShell';
@@ -170,31 +169,188 @@ export default function DashboardPage() {
     });
 
     useEffect(() => {
-        const unsubscribe =
-            onAuthStateChanged(
-                auth,
-                async (firebaseUser: User | null) => {
-                    if (!firebaseUser) {
-                        window.location.href = '/login';
+
+        alert('DASHBOARD PAGE LOADED');
+        
+        let nativeListener: {
+            remove: () => Promise<void>;
+        } | null = null;
+
+        let cancelled = false;
+
+        const initializeDashboard = async () => {
+            try {
+                setLoading(true);
+
+                if (Capacitor.isNativePlatform()) {
+                    nativeListener =
+                        await FirebaseAuthentication.addListener(
+                            'authStateChange',
+                            async (change) => {
+                                if (cancelled) {
+                                    return;
+                                }
+
+                                if (!change.user) {
+                                    return;
+                                }
+
+                                try {
+                                    await loadDashboard();
+                                    setLoading(false);
+                                } catch (err: unknown) {
+                                    if (cancelled) {
+                                        return;
+                                    }
+
+                                    setError(
+                                        err instanceof Error
+                                            ? err.message
+                                            : 'Failed to load dashboard',
+                                    );
+                                    setLoading(false);
+                                }
+                            },
+                        );
+
+                    const current =
+                        await FirebaseAuthentication.getCurrentUser();
+
+                    if (cancelled) {
                         return;
                     }
 
-                    try {
-                        setLoading(true);
+                    if (current.user) {
                         await loadDashboard();
-                    } catch (err: unknown) {
-                        setError(
-                            err instanceof Error
-                                ? err.message
-                                : 'Failed to load dashboard',
-                        );
-                    } finally {
                         setLoading(false);
+                        return;
                     }
-                },
-            );
 
-        return unsubscribe;
+                    let attempts = 0;
+
+                    const checkNativeUser = async () => {
+                        if (cancelled) {
+                            return;
+                        }
+
+                        try {
+                            const retry =
+                                await FirebaseAuthentication.getCurrentUser();
+
+                            if (cancelled) {
+                                return;
+                            }
+
+                            if (retry.user) {
+                                await loadDashboard();
+                                setLoading(false);
+                                return;
+                            }
+
+                            attempts++;
+
+                            if (attempts < 20) {
+                                window.setTimeout(checkNativeUser, 500);
+                                return;
+                            }
+
+                            window.location.href = '/login';
+                        } catch (retryError) {
+                            console.error(
+                                '[AUTH] Native dashboard retry failed:',
+                                retryError,
+                            );
+
+                            attempts++;
+
+                            if (attempts < 20) {
+                                window.setTimeout(checkNativeUser, 500);
+                                return;
+                            }
+
+                            if (!cancelled) {
+                                window.location.href = '/login';
+                            }
+                        }
+                    };
+
+                    checkNativeUser();
+
+                    return;
+                }
+
+                const { onAuthStateChanged } =
+                    await import('firebase/auth');
+                const { auth } =
+                    await import('../../src/lib/firebase');
+
+                const unsubscribe =
+                    onAuthStateChanged(
+                        auth,
+                        async (firebaseUser) => {
+                            if (cancelled) {
+                                return;
+                            }
+
+                            if (!firebaseUser) {
+                                setLoading(false);
+                                window.location.href = '/login';
+                                return;
+                            }
+
+                            try {
+                                await loadDashboard();
+                            } catch (err: unknown) {
+                                if (cancelled) {
+                                    return;
+                                }
+
+                                setError(
+                                    err instanceof Error
+                                        ? err.message
+                                        : 'Failed to load dashboard',
+                                );
+                            } finally {
+                                if (!cancelled) {
+                                    setLoading(false);
+                                }
+                            }
+                        },
+                    );
+
+                nativeListener = {
+                    remove: async () => {
+                        unsubscribe();
+                    },
+                };
+            } catch (err: unknown) {
+                console.error(
+                    '[AUTH] Dashboard auth initialization failed:',
+                    err,
+                );
+
+                if (cancelled) {
+                    return;
+                }
+
+                setError(
+                    err instanceof Error
+                        ? err.message
+                        : 'Failed to initialize authentication',
+                );
+                setLoading(false);
+            }
+        };
+
+        initializeDashboard();
+
+        return () => {
+            cancelled = true;
+
+            if (nativeListener) {
+                nativeListener.remove();
+            }
+        };
     }, []);
 
     const levelProgress = useMemo(() => {

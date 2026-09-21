@@ -56,9 +56,10 @@ export default function LoginPage() {
       const user = await loginWithGoogle();
 
       const hasPasswordProvider =
-        user.providerData.some(
-          (provider) => provider.providerId === 'password',
-        );
+        user.providerData?.some(
+          (provider: { providerId?: string }) =>
+            provider.providerId === 'password',
+        ) ?? false;
 
       if (!hasPasswordProvider) {
         setEmail(user.email ?? '');
