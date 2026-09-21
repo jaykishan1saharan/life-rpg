@@ -24,8 +24,13 @@ import {
 
 import { auth } from '../../src/lib/firebase';
 import AppShell from '../../src/components/layout/AppShell';
-import { listenForHydrationMessages, } from '../../src/lib/firebase-messaging';
+import { listenForHydrationMessages } from '../../src/lib/firebase-messaging';
 import { onAuthStateChanged } from '@firebase/auth';
+
+import { Capacitor } from '@capacitor/core';
+import {
+    FirebaseAuthentication,
+} from '@capacitor-firebase/authentication';
 
 type HydrationLog = {
     id: string;
@@ -74,6 +79,39 @@ type NextReminder = {
 
 const API_URL =
     process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+async function getHydrationAuthToken(): Promise<string | null> {
+    if (Capacitor.isNativePlatform()) {
+        try {
+            const current =
+                await FirebaseAuthentication.getCurrentUser();
+
+            if (!current.user) {
+                return null;
+            }
+
+            const result =
+                await FirebaseAuthentication.getIdToken();
+
+            return result.token;
+        } catch (error) {
+            console.error(
+                '[Hydration Auth] Native auth failed:',
+                error,
+            );
+
+            return null;
+        }
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        return null;
+    }
+
+    return user.getIdToken();
+}
 
 const QUICK_AMOUNTS = [100, 250, 500, 750];
 
@@ -208,14 +246,13 @@ export default function HydrationPage() {
 
                 setError('');
 
-                const user = auth.currentUser;
+                const token =
+                    await getHydrationAuthToken();
 
-                if (!user) {
+                if (!token) {
                     setError('Please login to access hydration.');
                     return;
                 }
-
-                const token = await user.getIdToken();
 
                 const response = await fetch(
                     `${API_URL}/hydration/today`,
@@ -346,16 +383,14 @@ export default function HydrationPage() {
     const loadNextReminder = useCallback(
         async () => {
             try {
-                const user = auth.currentUser;
+                const token =
+                    await getHydrationAuthToken();
 
-                if (!user) {
+                if (!token) {
                     setNextReminder(null);
                     setCountdown(0);
                     return;
                 }
-
-                const token =
-                    await user.getIdToken();
 
                 const response =
                     await fetch(
@@ -472,15 +507,10 @@ export default function HydrationPage() {
                     return;
                 }
 
-                const user =
-                    auth.currentUser;
+                const token =
+                    await getHydrationAuthToken();
 
-                /*
-                 * Firebase auth may still be loading.
-                 * Save the action and process it
-                 * once authentication becomes available.
-                 */
-                if (!user) {
+                if (!token) {
                     console.log(
                         '[Hydration Action] Auth not ready. Storing pending action.',
                     );
@@ -497,9 +527,6 @@ export default function HydrationPage() {
 
                 try {
                     setPopupActionLoading(true);
-
-                    const token =
-                        await user.getIdToken();
 
                     const endpoint =
                         action === 'DRANK'
@@ -665,14 +692,13 @@ export default function HydrationPage() {
                 setError('');
                 setSuccess('');
 
-                const user = auth.currentUser;
+                const token =
+                    await getHydrationAuthToken();
 
-                if (!user) {
+                if (!token) {
                     setError('Please login to add water.');
                     return;
                 }
-
-                const token = await user.getIdToken();
 
                 const response = await fetch(
                     `${API_URL}/hydration/log`,
@@ -727,49 +753,139 @@ export default function HydrationPage() {
     );
 
     useEffect(() => {
-        const unsubscribe =
-            onAuthStateChanged(
-                auth,
-                async (user) => {
-                    if (!user) {
-                        setIsLoading(false);
-                        setHydration(null);
+        let cancelled = false;
+
+        let nativeListener:
+            { remove: () => Promise<void> } | null =
+            null;
+
+        let webUnsubscribe:
+            (() => void) | undefined;
+
+        const handleAuthenticatedUser =
+            async () => {
+                if (cancelled) {
+                    return;
+                }
+
+                try {
+                    await loadHydration();
+
+                    if (cancelled) {
                         return;
                     }
 
-                    try {
-                        await loadHydration();
+                    const pending =
+                        pendingReminderAction.current;
 
-                        // =====================================
-                        // PROCESS PENDING NOTIFICATION ACTION
-                        // =====================================
+                    if (pending) {
+                        console.log(
+                            '[Hydration Action] Processing pending notification action:',
+                            pending,
+                        );
 
-                        const pending =
-                            pendingReminderAction.current;
+                        pendingReminderAction.current =
+                            null;
 
-                        if (pending) {
-                            console.log(
-                                '[Hydration Action] Processing pending notification action:',
-                                pending,
-                            );
-
-                            pendingReminderAction.current =
-                                null;
-
-                            await processHydrationReminderAction(
-                                pending,
-                            );
-                        }
-                    } catch (error) {
-                        console.error(
-                            '[Hydration Auth] Failed:',
-                            error,
+                        await processHydrationReminderAction(
+                            pending,
                         );
                     }
-                },
-            );
+                } catch (error) {
+                    console.error(
+                        '[Hydration Auth] Failed:',
+                        error,
+                    );
+                }
+            };
 
-        return unsubscribe;
+        const setupAuth =
+            async () => {
+                try {
+                    if (
+                        Capacitor.isNativePlatform()
+                    ) {
+                        nativeListener =
+                            await FirebaseAuthentication.addListener(
+                                'authStateChange',
+                                async (change) => {
+                                    if (
+                                        cancelled
+                                    ) {
+                                        return;
+                                    }
+
+                                    if (
+                                        change.user
+                                    ) {
+                                        await handleAuthenticatedUser();
+                                    } else {
+                                        setIsLoading(false);
+                                        setHydration(null);
+                                    }
+                                },
+                            );
+
+                        const current =
+                            await FirebaseAuthentication.getCurrentUser();
+
+                        if (
+                            current.user
+                        ) {
+                            await handleAuthenticatedUser();
+                        } else if (!cancelled) {
+                            setIsLoading(false);
+                            setHydration(null);
+                        }
+
+                        return;
+                    }
+
+                    webUnsubscribe =
+                        onAuthStateChanged(
+                            auth,
+                            async (user) => {
+                                if (
+                                    cancelled
+                                ) {
+                                    return;
+                                }
+
+                                if (!user) {
+                                    setIsLoading(false);
+                                    setHydration(null);
+                                    return;
+                                }
+
+                                await handleAuthenticatedUser();
+                            },
+                        );
+                } catch (error) {
+                    console.error(
+                        '[Hydration Auth] Initialization failed:',
+                        error,
+                    );
+
+                    if (!cancelled) {
+                        setIsLoading(false);
+                        setHydration(null);
+                    }
+                }
+            };
+
+        setupAuth();
+
+        return () => {
+            cancelled = true;
+
+            if (webUnsubscribe) {
+                webUnsubscribe();
+            }
+
+            if (nativeListener) {
+                nativeListener.remove();
+            }
+        };
     }, [
         loadHydration,
         processHydrationReminderAction,
@@ -1201,30 +1317,35 @@ export default function HydrationPage() {
          * If Firebase auth is already ready,
          * process immediately.
          *
-         * Otherwise the onAuthStateChanged
-         * listener will process it.
+         * Otherwise the auth listener will
+         * process the pending action.
          */
-        const user =
-            auth.currentUser;
+        const processIfAuthenticated =
+            async () => {
+                const token =
+                    await getHydrationAuthToken();
 
-        if (user) {
-            const pending =
-                pendingReminderAction.current;
+                if (token) {
+                    const pending =
+                        pendingReminderAction.current;
 
-            if (pending) {
-                console.log(
-                    '[Hydration Action] Auth already ready. Processing URL action.',
-                    pending,
-                );
+                    if (pending) {
+                        console.log(
+                            '[Hydration Action] Auth already ready. Processing URL action.',
+                            pending,
+                        );
 
-                pendingReminderAction.current =
-                    null;
+                        pendingReminderAction.current =
+                            null;
 
-                void processHydrationReminderAction(
-                    pending,
-                );
-            }
-        }
+                        await processHydrationReminderAction(
+                            pending,
+                        );
+                    }
+                }
+            };
+
+        void processIfAuthenticated();
     }, [
         processHydrationReminderAction,
     ]);

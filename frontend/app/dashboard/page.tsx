@@ -169,8 +169,6 @@ export default function DashboardPage() {
     });
 
     useEffect(() => {
-
-        alert('DASHBOARD PAGE LOADED');
         
         let nativeListener: {
             remove: () => Promise<void>;

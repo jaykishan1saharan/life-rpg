@@ -1,14 +1,70 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 export default function Home() {
 
+    const router = useRouter();
+
     useEffect(() => {
-        alert('ROOT PAGE LOADED');
-    }, []);
+        let cancelled = false;
+        let listener:
+            { remove: () => Promise<void> } | null = null;
+
+        const checkNativeAuth = async () => {
+            try {
+                if (!Capacitor.isNativePlatform()) {
+                    return;
+                }
+
+                listener =
+                    await FirebaseAuthentication.addListener(
+                        'authStateChange',
+                        (change) => {
+                            if (cancelled) {
+                                return;
+                            }
+
+                            if (change.user) {
+                                router.replace('/dashboard');
+                            }
+                        },
+                    );
+
+                const current =
+                    await FirebaseAuthentication.getCurrentUser();
+
+                if (cancelled) {
+                    return;
+                }
+
+                if (current.user) {
+                    router.replace('/dashboard');
+                    return;
+                }
+            } catch (error) {
+                console.error(
+                    '[ROOT AUTH] Failed:',
+                    error,
+                );
+            }
+        };
+
+        checkNativeAuth();
+
+        return () => {
+            cancelled = true;
+
+            if (listener) {
+                listener.remove();
+            }
+        };
+    }, [router]);
 
     return (
         <main className="relative min-h-screen overflow-hidden bg-[#050508] text-white">
