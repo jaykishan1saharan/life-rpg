@@ -32,23 +32,158 @@ export default function NativePushInitializer() {
         );
 
         const {
-          onAuthStateChanged,
-        } = await import('firebase/auth');
-
-        const { auth } =
-          await import(
-            '../../src/lib/firebase'
-          );
+          FirebaseAuthentication,
+        } = await import(
+          '@capacitor-firebase/authentication'
+        );
 
         // ==========================================
         // TOKEN STORAGE
         // ==========================================
 
-        let nativeFcmToken: string | null =
-          null;
+        let registeredToken: string | null = null;
 
-        let registeredToken: string | null =
-          null;
+        // ==========================================
+        // WAIT FOR NATIVE FIREBASE USER
+        // ==========================================
+
+        const waitForNativeFirebaseUser =
+          async (): Promise<any> => {
+            console.log(
+              '[Native Push] Checking native Firebase user...',
+            );
+
+            // ----------------------------------------
+            // 1. Check immediately
+            // ----------------------------------------
+
+            try {
+              const currentUser =
+                await FirebaseAuthentication.getCurrentUser();
+
+              if (currentUser.user) {
+                console.log(
+                  '[Native Push] Native Firebase user found:',
+                  currentUser.user.uid,
+                );
+
+                return currentUser.user;
+              }
+            } catch (error) {
+              console.error(
+                '[Native Push] getCurrentUser failed:',
+                error,
+              );
+            }
+
+            // ----------------------------------------
+            // 2. Listen for native auth state
+            // ----------------------------------------
+
+            console.log(
+              '[Native Push] Waiting for native Firebase auth state...',
+            );
+
+            return new Promise<any>(
+              async (resolve) => {
+                let resolved = false;
+
+                const finish = async (
+                  user: any,
+                ) => {
+                  if (resolved || !user) return;
+
+                  resolved = true;
+
+                  try {
+                    await authStateListener?.remove();
+                  } catch {}
+
+                  console.log(
+                    '[Native Push] Native Firebase auth ready:',
+                    user.uid,
+                  );
+
+                  resolve(user);
+                };
+
+                let authStateListener:
+                  | {
+                      remove: () => Promise<void>;
+                    }
+                  | undefined;
+
+                try {
+                  authStateListener =
+                    await FirebaseAuthentication.addListener(
+                      'authStateChange',
+                      (change) => {
+                        console.log(
+                          '[Native Push] Native auth state changed:',
+                          change.user
+                            ? `LOGGED IN ${change.user.uid}`
+                            : 'NOT LOGGED IN',
+                        );
+
+                        if (change.user) {
+                          void finish(change.user);
+                        }
+                      },
+                    );
+                } catch (error) {
+                  console.error(
+                    '[Native Push] Failed to add native auth listener:',
+                    error,
+                  );
+                }
+
+                // ------------------------------------
+                // 3. Retry current user for a few seconds
+                // ------------------------------------
+
+                let attempts = 0;
+
+                const interval = setInterval(
+                  async () => {
+                    if (resolved) {
+                      clearInterval(interval);
+                      return;
+                    }
+
+                    attempts++;
+
+                    try {
+                      const currentUser =
+                        await FirebaseAuthentication.getCurrentUser();
+
+                      if (currentUser.user) {
+                        clearInterval(interval);
+                        await finish(
+                          currentUser.user,
+                        );
+                        return;
+                      }
+                    } catch {}
+
+                    if (attempts >= 15) {
+                      clearInterval(interval);
+
+                      try {
+                        await authStateListener?.remove();
+                      } catch {}
+
+                      console.error(
+                        '[Native Push] Timed out waiting for native Firebase user',
+                      );
+
+                      resolve(null);
+                    }
+                  },
+                  1000,
+                );
+              },
+            );
+          };
 
         // ==========================================
         // REGISTER TOKEN WITH BACKEND
@@ -62,7 +197,7 @@ export default function NativePushInitializer() {
             try {
               if (!user) {
                 console.log(
-                  '[Native Push] No Firebase user',
+                  '[Native Push] No native Firebase user',
                 );
                 return;
               }
@@ -77,18 +212,33 @@ export default function NativePushInitializer() {
               }
 
               console.log(
-                '[Native Push] Firebase user:',
+                '[Native Push] Native Firebase user:',
                 user.uid,
               );
 
+              // --------------------------------------
+              // Get native Firebase ID token
+              // --------------------------------------
+
+              const idTokenResult =
+                await FirebaseAuthentication.getIdToken();
+
               const idToken =
-                await user.getIdToken(
-                  true,
+                idTokenResult.token;
+
+              if (!idToken) {
+                throw new Error(
+                  'Native Firebase ID token is missing',
                 );
+              }
 
               console.log(
-                '[Native Push] ID token obtained',
+                '[Native Push] Native ID token obtained',
               );
+
+              // --------------------------------------
+              // API URL
+              // --------------------------------------
 
               const apiUrl =
                 process.env
@@ -104,6 +254,10 @@ export default function NativePushInitializer() {
                   'NEXT_PUBLIC_API_URL is missing',
                 );
               }
+
+              // --------------------------------------
+              // Register FCM token
+              // --------------------------------------
 
               console.log(
                 '[Native Push] Registering native FCM token with backend...',
@@ -167,52 +321,12 @@ export default function NativePushInitializer() {
           };
 
         // ==========================================
-        // FIREBASE AUTH
-        // ==========================================
-
-        const waitForFirebaseUser =
-          new Promise<any>(
-            (resolve) => {
-              const unsubscribe =
-                onAuthStateChanged(
-                  auth,
-                  (user) => {
-                    console.log(
-                      '[Native Push] Auth state:',
-                      user
-                        ? `LOGGED IN ${user.uid}`
-                        : 'NOT LOGGED IN',
-                    );
-
-                    if (user) {
-                      unsubscribe();
-
-                      resolve(user);
-                    }
-                  },
-                );
-
-              // Firebase may already have user
-              if (auth.currentUser) {
-                unsubscribe();
-
-                resolve(
-                  auth.currentUser,
-                );
-              }
-            },
-          );
-
-        // ==========================================
-        // PUSH REGISTRATION
+        // FCM REGISTRATION
         // ==========================================
 
         await PushNotifications.addListener(
           'registration',
           async (token) => {
-            nativeFcmToken =
-              token.value;
-
             console.log(
               '========================================',
             );
@@ -222,7 +336,8 @@ export default function NativePushInitializer() {
             );
 
             console.log(
-              token.value,
+              '[Native Push] Token length:',
+              token.value.length,
             );
 
             console.log(
@@ -231,14 +346,21 @@ export default function NativePushInitializer() {
 
             try {
               console.log(
-                '[Native Push] Waiting for Firebase Auth...',
+                '[Native Push] Waiting for native Firebase Auth...',
               );
 
               const user =
-                await waitForFirebaseUser;
+                await waitForNativeFirebaseUser();
+
+              if (!user) {
+                console.error(
+                  '[Native Push] No native Firebase user available. Token not registered.',
+                );
+                return;
+              }
 
               console.log(
-                '[Native Push] Firebase Auth ready',
+                '[Native Push] Native Firebase Auth ready',
               );
 
               await registerTokenWithBackend(
@@ -247,7 +369,7 @@ export default function NativePushInitializer() {
               );
             } catch (error) {
               console.error(
-                '[Native Push] Failed waiting for Firebase Auth:',
+                '[Native Push] Failed waiting for native Firebase Auth:',
                 error,
               );
             }
@@ -374,7 +496,7 @@ export default function NativePushInitializer() {
       }
     };
 
-    initializePush();
+    void initializePush();
   }, []);
 
   return null;
