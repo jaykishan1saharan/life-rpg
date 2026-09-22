@@ -49,6 +49,8 @@ public class HydrationAlarmService extends Service {
 
     private int alarmId = 0;
 
+    private long triggerAt = 0L;
+
     private String title =
             "💧 TIME TO HYDRATE";
 
@@ -222,6 +224,12 @@ public class HydrationAlarmService extends Service {
                             "sound_enabled",
                             true
                     );
+
+        triggerAt =
+        intent.getLongExtra(
+                "trigger_at",
+                0L
+        );
 
             Notification notification =
                     buildNotification();
