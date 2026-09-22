@@ -7,9 +7,22 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 
+import {
+  Capacitor,
+  registerPlugin,
+} from '@capacitor/core';
+
+import {
+  FirebaseAuthentication,
+} from '@capacitor-firebase/authentication';
+
 import { auth } from '../../../src/lib/firebase';
 
 import AppShell from '../../../src/components/layout/AppShell';
+
+import {
+  scheduleNativeHydrationReminders,
+} from '../../../src/lib/native-hydration-scheduler';
 
 const WATER_GOALS = [
   { liters: 2, ml: 2000 },
@@ -57,6 +70,85 @@ const REMINDER_MODES = [
 const INTERVAL_OPTIONS = [1, 2, 3, 4];
 
 const SNOOZE_OPTIONS = [10, 15, 20, 30];
+
+async function getHydrationAuthToken(): Promise<string | null> {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const current =
+        await FirebaseAuthentication.getCurrentUser();
+
+      if (!current.user) {
+        console.warn(
+          '[Hydration Auth] Native Firebase user is not available yet.',
+        );
+        return null;
+      }
+
+      const result =
+        await FirebaseAuthentication.getIdToken({
+          forceRefresh: false,
+        });
+
+      return result.token;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      return null;
+    }
+
+    return await getIdToken(user);
+  } catch (error) {
+    console.error(
+      '[Hydration Auth] Failed to get authentication token:',
+      error,
+    );
+
+    return null;
+  }
+}
+
+type NativeHydrationAlarmPlugin = {
+  canScheduleExactAlarms(): Promise<{
+    allowed: boolean;
+  }>;
+
+  openExactAlarmSettings(): Promise<void>;
+};
+
+const NativeHydrationAlarm =
+  registerPlugin<NativeHydrationAlarmPlugin>(
+    'NativeHydrationAlarm',
+  );
+
+async function getNativeExactAlarmPermission(): Promise<boolean | null> {
+  if (!Capacitor.isNativePlatform()) {
+    return null;
+  }
+
+  try {
+    const result =
+      await NativeHydrationAlarm.canScheduleExactAlarms();
+
+    return Boolean(result.allowed);
+  } catch (error) {
+    console.error(
+      '[Hydration] Failed to check exact alarm permission:',
+      error,
+    );
+
+    return null;
+  }
+}
+
+async function openNativeExactAlarmSettings(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) {
+    return;
+  }
+
+  await NativeHydrationAlarm.openExactAlarmSettings();
+}
 
 export default function HydrationPage() {
   const [step, setStep] = useState(1);
@@ -156,6 +248,9 @@ export default function HydrationPage() {
   const [isLoadingSettings, setIsLoadingSettings] =
     useState(true);
 
+  const [nativeExactAlarmAllowed, setNativeExactAlarmAllowed] =
+    useState<boolean | null>(null);
+
   // -----------------------------------------
   // PROCESS REMINDER DRANK ACTION
   // -----------------------------------------
@@ -172,21 +267,13 @@ export default function HydrationPage() {
       return;
     }
 
-    const currentUser = auth.currentUser;
+    const idToken = await getHydrationAuthToken();
 
-    /*
-     * The Service Worker does not have the Firebase
-     * authentication token. If the user session is not
-     * ready yet, keep the action pending and process it
-     * when Firebase authentication becomes available.
-     */
-
-    if (!currentUser) {
+    if (!idToken) {
       pendingDrankAction.current = {
         eventId,
         amountMl,
       };
-
       return;
     }
 
@@ -199,9 +286,6 @@ export default function HydrationPage() {
           'NEXT_PUBLIC_API_URL is not configured.',
         );
       }
-
-      const idToken =
-        await getIdToken(currentUser);
 
       const response =
         await fetch(
@@ -230,7 +314,7 @@ export default function HydrationPage() {
       if (!response.ok) {
         throw new Error(
           data?.message ||
-          'Failed to log reminder water.',
+            'Failed to log reminder water.',
         );
       }
 
@@ -274,9 +358,10 @@ export default function HydrationPage() {
       return;
     }
 
-    const currentUser = auth.currentUser;
+    const idToken =
+      await getHydrationAuthToken();
 
-    if (!currentUser) {
+    if (!idToken) {
       return;
     }
 
@@ -289,9 +374,6 @@ export default function HydrationPage() {
           'NEXT_PUBLIC_API_URL is not configured.',
         );
       }
-
-      const idToken =
-        await getIdToken(currentUser);
 
       const response =
         await fetch(
@@ -320,7 +402,7 @@ export default function HydrationPage() {
       if (!response.ok) {
         throw new Error(
           data?.message ||
-          'Failed to snooze reminder.',
+            'Failed to snooze reminder.',
         );
       }
 
@@ -493,179 +575,285 @@ export default function HydrationPage() {
   // -----------------------------------------
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (currentUser) => {
-        if (!currentUser) {
+    let cancelled = false;
+    let unsubscribeWebAuth: (() => void) | null = null;
+
+    const loadSettings = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      setIsLoadingSettings(true);
+      setActivationError('');
+
+      try {
+        const idToken =
+          await getHydrationAuthToken();
+
+        /*
+         * Native Android auth can be restored asynchronously
+         * when the app starts. Give Firebase a short window to
+         * finish restoring the native session before declaring
+         * the user signed out.
+         */
+        if (!idToken) {
+          if (Capacitor.isNativePlatform()) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 700),
+            );
+          }
+        }
+
+        const finalToken =
+          idToken ||
+          (await getHydrationAuthToken());
+
+        if (!finalToken) {
           setHasExistingSettings(false);
-          setIsLoadingSettings(false);
           return;
         }
 
-        try {
-          setIsLoadingSettings(true);
-          setActivationError('');
+        if (Capacitor.isNativePlatform()) {
+          const exactAllowed =
+            await getNativeExactAlarmPermission();
 
-          const idToken =
-            await getIdToken(currentUser);
-
-          const apiUrl =
-            process.env.NEXT_PUBLIC_API_URL;
-
-          if (!apiUrl) {
-            throw new Error(
-              'NEXT_PUBLIC_API_URL is not configured.',
+          if (!cancelled) {
+            setNativeExactAlarmAllowed(
+              exactAllowed,
             );
           }
+        }
 
-          const response = await fetch(
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL;
+
+        if (!apiUrl) {
+          throw new Error(
+            'NEXT_PUBLIC_API_URL is not configured.',
+          );
+        }
+
+        const response =
+          await fetch(
             `${apiUrl}/hydration`,
             {
               method: 'GET',
               headers: {
-                Authorization: `Bearer ${idToken}`,
+                Authorization:
+                  `Bearer ${finalToken}`,
               },
             },
           );
 
-          const data = await response
+        const data =
+          await response
             .json()
             .catch(() => null);
 
-          if (!response.ok) {
-            throw new Error(
-              data?.message ||
+        /*
+         * A missing settings record is a valid first-time state.
+         * Do not turn it into a generic error.
+         */
+        if (
+          response.status === 404 ||
+          !data?.settings
+        ) {
+          setHasExistingSettings(false);
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            data?.message ||
               'Failed to load hydration settings.',
-            );
-          }
+          );
+        }
 
-          const settings = data?.settings;
+        const settings =
+          data.settings;
 
-          if (!settings) {
-            setHasExistingSettings(false);
-            return;
-          }
+        setHasExistingSettings(true);
 
-          setHasExistingSettings(true);
-
-          // Daily goal
-          const savedGoal = Number(
+        const savedGoal =
+          Number(
             settings.daily_goal_ml,
           );
 
-          const presetGoal = WATER_GOALS.find(
-            (goal) => goal.ml === savedGoal,
+        const presetGoal =
+          WATER_GOALS.find(
+            (goal) =>
+              goal.ml === savedGoal,
           );
 
-          if (presetGoal) {
-            setSelectedGoal(savedGoal);
-            setCustomGoal('');
-          } else {
-            setSelectedGoal(0);
-            setCustomGoal(String(savedGoal));
-          }
-
-          // Reminder mode
-          const savedReminderMode =
-            settings.reminder_mode as ReminderMode;
-
-          if (
-            ['SMART', 'INTERVAL', 'CUSTOM', 'HYBRID'].includes(
-              savedReminderMode,
-            )
-          ) {
-            setReminderMode(savedReminderMode);
-          }
-
-          // Interval
-          if (settings.interval_minutes) {
-            setIntervalHours(
-              Number(settings.interval_minutes) / 60,
-            );
-          }
-
-          // Active window
-          if (settings.wake_time) {
-            setWakeTime(
-              String(settings.wake_time).slice(0, 5),
-            );
-          }
-
-          if (settings.sleep_time) {
-            setSleepTime(
-              String(settings.sleep_time).slice(0, 5),
-            );
-          }
-
-          // Alerts
-          setNotificationsEnabled(
-            Boolean(settings.notifications_enabled),
+        if (presetGoal) {
+          setSelectedGoal(savedGoal);
+          setCustomGoal('');
+        } else {
+          setSelectedGoal(0);
+          setCustomGoal(
+            String(savedGoal),
           );
+        }
 
-          setInAppEnabled(
-            Boolean(settings.in_app_enabled),
+        const savedReminderMode =
+          settings.reminder_mode as ReminderMode;
+
+        if (
+          [
+            'SMART',
+            'INTERVAL',
+            'CUSTOM',
+            'HYBRID',
+          ].includes(
+            savedReminderMode,
+          )
+        ) {
+          setReminderMode(
+            savedReminderMode,
           );
+        }
 
-          setSoundEnabled(
-            Boolean(settings.sound_enabled),
+        if (
+          settings.interval_minutes
+        ) {
+          setIntervalHours(
+            Number(
+              settings.interval_minutes,
+            ) / 60,
           );
+        }
 
-          // Snooze
-          if (settings.snooze_minutes) {
-            setSnoozeMinutes(
-              Number(settings.snooze_minutes),
-            );
-          }
-
-          // Custom / hybrid reminder times
-          if (Array.isArray(data?.reminderTimes)) {
-            setCustomReminders(
-              data.reminderTimes.map(
-                (time: unknown) =>
-                  String(time).slice(0, 5),
-              ),
-            );
-          }
-
-          /*
-           * A notification may have opened this page
-           * before Firebase authentication finished loading.
-           * Process that queued action now.
-           */
-
-          if (
-            pendingDrankAction.current
-          ) {
-            const pending =
-              pendingDrankAction.current;
-
-            pendingDrankAction.current =
-              null;
-
-            await processDrankAction(
-              pending.eventId,
-              pending.amountMl,
-            );
-          }
-        } catch (error) {
-          console.error(
-            '[Hydration] Failed to load settings:',
-            error,
+        if (settings.wake_time) {
+          setWakeTime(
+            String(
+              settings.wake_time,
+            ).slice(0, 5),
           );
+        }
 
+        if (settings.sleep_time) {
+          setSleepTime(
+            String(
+              settings.sleep_time,
+            ).slice(0, 5),
+          );
+        }
+
+        setNotificationsEnabled(
+          Boolean(
+            settings.notifications_enabled,
+          ),
+        );
+
+        setInAppEnabled(
+          Boolean(
+            settings.in_app_enabled,
+          ),
+        );
+
+        setSoundEnabled(
+          Boolean(
+            settings.sound_enabled,
+          ),
+        );
+
+        if (settings.snooze_minutes) {
+          setSnoozeMinutes(
+            Number(
+              settings.snooze_minutes,
+            ),
+          );
+        }
+
+        if (
+          Array.isArray(
+            data?.reminderTimes,
+          )
+        ) {
+          setCustomReminders(
+            data.reminderTimes.map(
+              (time: unknown) =>
+                String(time).slice(0, 5),
+            ),
+          );
+        }
+
+        if (
+          pendingDrankAction.current &&
+          !cancelled
+        ) {
+          const pending =
+            pendingDrankAction.current;
+
+          pendingDrankAction.current =
+            null;
+
+          await processDrankAction(
+            pending.eventId,
+            pending.amountMl,
+          );
+        }
+      } catch (error) {
+        console.error(
+          '[Hydration] Failed to load settings:',
+          error,
+        );
+
+        if (!cancelled) {
           setHasExistingSettings(false);
           setActivationError(
             error instanceof Error
               ? error.message
               : 'Failed to load hydration settings.',
           );
-        } finally {
+        }
+      } finally {
+        if (!cancelled) {
           setIsLoadingSettings(false);
         }
-      },
-    );
+      }
+    };
 
-    return () => unsubscribe();
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+      /*
+       * Android/iOS:
+       * never wait for the Web Firebase onAuthStateChanged event.
+       * Native Firebase is the source of truth here.
+       */
+      loadSettings();
+    } else {
+      /*
+       * PC/Web:
+       * keep the existing Firebase Web auth flow.
+       */
+      unsubscribeWebAuth =
+        onAuthStateChanged(
+          auth,
+          async (currentUser) => {
+            if (cancelled) {
+              return;
+            }
+
+            if (!currentUser) {
+              setHasExistingSettings(false);
+              setIsLoadingSettings(false);
+              return;
+            }
+
+            await loadSettings();
+          },
+        );
+    }
+
+    return () => {
+      cancelled = true;
+
+      if (unsubscribeWebAuth) {
+        unsubscribeWebAuth();
+      }
+    };
   }, []);
 
   // -----------------------------------------
@@ -946,7 +1134,7 @@ export default function HydrationPage() {
   };
 
   // -----------------------------------------
-  // ACTIVATE HYDRATION
+  // ACTIVATE / UPDATE HYDRATION
   // -----------------------------------------
 
   const activateHydration =
@@ -954,29 +1142,17 @@ export default function HydrationPage() {
       setActivationError('');
       setActivationSuccess(false);
 
-      if (!auth.currentUser) {
-        setActivationError(
-          'You are not signed in. Please sign in again.',
-        );
-
-        return;
-      }
-
       if (activeGoal <= 0) {
         setActivationError(
           'Please select a valid daily water goal.',
         );
-
         return;
       }
 
-      if (
-        hasInvalidCustomReminders
-      ) {
+      if (hasInvalidCustomReminders) {
         setActivationError(
           'Some custom reminders are outside your active hydration window.',
         );
-
         return;
       }
 
@@ -984,18 +1160,54 @@ export default function HydrationPage() {
         setIsActivating(true);
 
         const idToken =
-          await getIdToken(
-            auth.currentUser,
+          await getHydrationAuthToken();
+
+        if (!idToken) {
+          setActivationError(
+            'You are not signed in. Please sign in again.',
           );
+          return;
+        }
 
         const apiUrl =
-          process.env
-            .NEXT_PUBLIC_API_URL;
+          process.env.NEXT_PUBLIC_API_URL;
 
         if (!apiUrl) {
           throw new Error(
             'NEXT_PUBLIC_API_URL is not configured.',
           );
+        }
+
+        /*
+         * IMPORTANT:
+         * On Android, verify exact-alarm permission BEFORE
+         * writing to the backend. This prevents the old situation
+         * where backend settings were saved successfully but native
+         * alarm scheduling failed afterward.
+         */
+        if (
+          Capacitor.isNativePlatform() &&
+          notificationsEnabled
+        ) {
+          const exactAllowed =
+            await getNativeExactAlarmPermission();
+
+          setNativeExactAlarmAllowed(
+            exactAllowed,
+          );
+
+          if (!exactAllowed) {
+            setActivationError(
+              'Android "Alarms & reminders" permission is required. Enable it in the settings page that just opened, then tap UPDATE HYDRATION again.',
+            );
+
+            /*
+             * Import the scheduler only when the native permission
+             * is actually needed.
+             */
+            await openNativeExactAlarmSettings();
+            return;
+          }
         }
 
         const payload = {
@@ -1007,16 +1219,15 @@ export default function HydrationPage() {
           intervalMinutes:
             reminderMode ===
               'INTERVAL' ||
-              reminderMode ===
+            reminderMode ===
               'HYBRID'
-              ? intervalHours *
-              60
+              ? intervalHours * 60
               : undefined,
 
           customReminderTimes:
             reminderMode ===
               'CUSTOM' ||
-              reminderMode ===
+            reminderMode ===
               'HYBRID'
               ? customReminders
               : [],
@@ -1026,7 +1237,8 @@ export default function HydrationPage() {
           sleepTime,
 
           timezone:
-            Intl.DateTimeFormat().resolvedOptions()
+            Intl.DateTimeFormat()
+              .resolvedOptions()
               .timeZone ||
             'Asia/Kolkata',
 
@@ -1039,31 +1251,44 @@ export default function HydrationPage() {
           snoozeMinutes,
         };
 
-        const endpoint = hasExistingSettings
-          ? `${apiUrl}/hydration/settings`
-          : `${apiUrl}/hydration/setup`;
+        const endpoint =
+          hasExistingSettings
+            ? `${apiUrl}/hydration/settings`
+            : `${apiUrl}/hydration/setup`;
 
-        const method = hasExistingSettings
-          ? 'PATCH'
-          : 'POST';
+        const method =
+          hasExistingSettings
+            ? 'PATCH'
+            : 'POST';
+
+        console.log(
+          '[Hydration] Saving settings:',
+          {
+            platform:
+              Capacitor.isNativePlatform()
+                ? 'native'
+                : 'web',
+            endpoint,
+            method,
+            hasExistingSettings,
+          },
+        );
 
         const response =
           await fetch(
             endpoint,
             {
               method,
-
               headers: {
                 'Content-Type':
                   'application/json',
-
                 Authorization:
                   `Bearer ${idToken}`,
               },
-
-              body: JSON.stringify(
-                payload,
-              ),
+              body:
+                JSON.stringify(
+                  payload,
+                ),
             },
           );
 
@@ -1074,22 +1299,197 @@ export default function HydrationPage() {
               () => null,
             );
 
-        if (!response.ok) {
+        /*
+         * Defensive recovery:
+         *
+         * If an old/stale Android state somehow says
+         * hasExistingSettings=false but the backend correctly
+         * reports that the record already exists, immediately
+         * retry the same save as PATCH.
+         *
+         * This makes the Android update path resilient even if
+         * the first settings-load request raced Firebase startup.
+         */
+        if (
+          !response.ok &&
+          method === 'POST' &&
+          String(
+            data?.message || '',
+          )
+            .toLowerCase()
+            .includes(
+              'already exists',
+            )
+        ) {
+          console.warn(
+            '[Hydration] Setup record already exists. Retrying as PATCH.',
+          );
+
+          const retryResponse =
+            await fetch(
+              `${apiUrl}/hydration/settings`,
+              {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type':
+                    'application/json',
+                  Authorization:
+                    `Bearer ${idToken}`,
+                },
+                body:
+                  JSON.stringify(
+                    payload,
+                  ),
+              },
+            );
+
+          const retryData =
+            await retryResponse
+              .json()
+              .catch(
+                () => null,
+              );
+
+          if (!retryResponse.ok) {
+            throw new Error(
+              retryData?.message ||
+                'Failed to update existing hydration settings.',
+            );
+          }
+
+          console.log(
+            '[Hydration] Existing settings updated after POST fallback.',
+            retryData,
+          );
+        } else if (!response.ok) {
           throw new Error(
             data?.message ||
-            'Failed to activate hydration system.',
+              'Failed to save hydration settings.',
+          );
+        } else {
+          console.log(
+            '[Hydration] Backend settings saved:',
+            data,
           );
         }
 
-        console.log(
-          'Hydration activated:',
-          data,
-        );
+        /*
+         * Android native alarms
+         */
+        if (
+          Capacitor.isNativePlatform() &&
+          notificationsEnabled
+        ) {
+          await scheduleNativeHydrationReminders({
+            dailyGoalMl:
+              activeGoal,
 
-        setHasExistingSettings(true);
+            reminderMode,
+
+            intervalMinutes:
+              reminderMode ===
+                'INTERVAL' ||
+              reminderMode ===
+                'HYBRID'
+                ? intervalHours * 60
+                : undefined,
+
+            customReminderTimes:
+              reminderMode ===
+                'CUSTOM' ||
+              reminderMode ===
+                'HYBRID'
+                ? customReminders
+                : [],
+
+            wakeTime,
+
+            sleepTime,
+
+            notificationsEnabled,
+
+            soundEnabled,
+          });
+
+          console.log(
+            '[Hydration] Native Android alarms scheduled.',
+          );
+        }
+
+        if (
+          Capacitor.isNativePlatform() &&
+          !notificationsEnabled
+        ) {
+          /*
+           * If the user disables hydration notifications, remove
+           * previously scheduled native hydration alarms.
+           */
+          const scheduler =
+            await import(
+              '../../../src/lib/native-hydration-scheduler'
+            );
+
+          await scheduler.clearNativeHydrationReminders();
+
+          console.log(
+            '[Hydration] Native alarms cleared because notifications are disabled.',
+          );
+        }
+
+        setHasExistingSettings(
+          true,
+        );
 
         setActivationSuccess(
           true,
+        );
+
+        setNativeExactAlarmAllowed(
+          notificationsEnabled
+            ? true
+            : nativeExactAlarmAllowed,
+        );
+
+        console.log(
+          '========================================',
+        );
+
+        console.log(
+          '[Hydration] HYDRATION UPDATED',
+        );
+
+        console.log(
+          '[Hydration] Goal:',
+          activeGoal,
+        );
+
+        console.log(
+          '[Hydration] Mode:',
+          reminderMode,
+        );
+
+        console.log(
+          '[Hydration] Wake:',
+          wakeTime,
+        );
+
+        console.log(
+          '[Hydration] Sleep:',
+          sleepTime,
+        );
+
+        console.log(
+          '[Hydration] Notifications:',
+          notificationsEnabled,
+        );
+
+        console.log(
+          '[Hydration] Sound:',
+          soundEnabled,
+        );
+
+        console.log(
+          '========================================',
         );
       } catch (error) {
         console.error(
@@ -1100,10 +1500,12 @@ export default function HydrationPage() {
         setActivationError(
           error instanceof Error
             ? error.message
-            : 'Something went wrong while activating hydration.',
+            : 'Something went wrong while saving hydration settings.',
         );
       } finally {
-        setIsActivating(false);
+        setIsActivating(
+          false,
+        );
       }
     };
 
@@ -2441,6 +2843,50 @@ export default function HydrationPage() {
               </div>
             </div>
           )}
+
+          {Capacitor.isNativePlatform() &&
+            nativeExactAlarmAllowed === false &&
+            notificationsEnabled && (
+              <div className="mb-6 rounded-2xl border border-amber-400/25 bg-amber-400/[0.05] p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-[10px] font-black tracking-[0.15em] text-amber-300">
+                      ANDROID ALARM PERMISSION REQUIRED
+                    </div>
+
+                    <p className="mt-2 max-w-2xl text-xs leading-5 text-amber-100/60">
+                      Life Easy TODO needs Android
+                      &quot;Alarms & reminders&quot;
+                      permission for reliable hydration
+                      alarms when the app is closed or the
+                      screen is locked. Notification permission
+                      is separate and can already be enabled.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await openNativeExactAlarmSettings();
+                      } catch (error) {
+                        console.error(
+                          '[Hydration] Failed to open exact alarm settings:',
+                          error,
+                        );
+
+                        setActivationError(
+                          'Unable to open Android alarm settings. Please open Settings → Apps → Life Easy TODO → Alarms & reminders manually.',
+                        );
+                      }
+                    }}
+                    className="shrink-0 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-[10px] font-black tracking-[0.12em] text-amber-300 transition hover:border-amber-300/50 hover:bg-amber-400/15"
+                  >
+                    OPEN ALARM SETTINGS
+                  </button>
+                </div>
+              </div>
+            )}
 
           {/* MAIN PANEL */}
 
