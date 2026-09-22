@@ -347,6 +347,69 @@ export class HydrationRepository {
     return result.rows[0] ?? null;
   }
 
+  async findReminderEvent(
+    userId: string,
+    reminderDate: string,
+    reminderTime: string,
+  ) {
+    const result =
+      await this.database.query(
+        `
+      SELECT *
+      FROM hydration_reminder_events
+      WHERE user_id = $1
+        AND reminder_date = $2
+        AND reminder_time = $3
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+        [
+          userId,
+          reminderDate,
+          reminderTime,
+        ],
+      );
+
+    return result.rows[0] ?? null;
+  }
+
+  async getOrCreateNativeReminderEvent(
+    userId: string,
+    reminderKey: string,
+    reminderDate: string,
+    reminderTime: string,
+  ) {
+
+    const existing =
+      await this.findReminderEvent(
+        userId,
+        reminderDate,
+        reminderTime,
+      );
+
+    if (existing) {
+      return existing;
+    }
+
+    const created =
+      await this.createReminderEvent(
+        userId,
+        reminderKey,
+        reminderDate,
+        reminderTime,
+      );
+
+    if (created) {
+      return created;
+    }
+
+    return this.findReminderEvent(
+      userId,
+      reminderDate,
+      reminderTime,
+    );
+  }
+
   async markReminderSent(
     eventId: string,
   ) {

@@ -393,6 +393,502 @@ export class HydrationService {
     };
   }
 
+  async processNativeReminderAction(
+    userId: string,
+    action: 'DRANK' | 'SNOOZE',
+    amountMl = 250,
+    alarmId = 0,
+    triggerAt = 0,
+    snoozeMinutes = 15,
+  ) {
+
+    if (
+      action !== 'DRANK' &&
+      action !== 'SNOOZE'
+    ) {
+      throw new BadRequestException(
+        'Invalid native hydration action',
+      );
+    }
+
+    if (
+      !Number.isInteger(amountMl) ||
+      amountMl <= 0
+    ) {
+      throw new BadRequestException(
+        'Invalid water amount',
+      );
+    }
+
+    if (
+      !Number.isInteger(snoozeMinutes) ||
+      ![
+        10,
+        15,
+        20,
+        30,
+      ].includes(snoozeMinutes)
+    ) {
+      throw new BadRequestException(
+        'Invalid snooze duration',
+      );
+    }
+
+    if (
+      !Number.isFinite(triggerAt) ||
+      triggerAt <= 0
+    ) {
+      throw new BadRequestException(
+        'Native alarm trigger time is required',
+      );
+    }
+
+    const settings =
+      await this.repository.findSettings(
+        userId,
+      );
+
+    if (!settings) {
+      throw new NotFoundException(
+        'Hydration settings not found',
+      );
+    }
+
+    const timezone =
+      settings.timezone ||
+      'Asia/Kolkata';
+
+    const localParts =
+      this.getDateTimeInTimezone(
+        triggerAt,
+        timezone,
+      );
+
+    const reminderDate =
+      localParts.date;
+
+    const reminderTime =
+      localParts.time;
+
+    const reminderKey =
+      await this.resolveNativeReminderKey(
+        settings,
+        userId,
+        reminderTime,
+      );
+
+    if (!reminderKey) {
+      throw new BadRequestException(
+        `No hydration reminder matches ${reminderDate} ${reminderTime}`,
+      );
+    }
+
+    let event =
+      await this.repository
+        .getOrCreateNativeReminderEvent(
+          userId,
+          reminderKey,
+          reminderDate,
+          reminderTime,
+        );
+
+    if (!event) {
+      throw new BadRequestException(
+        'Unable to resolve hydration reminder event',
+      );
+    }
+
+    /*
+     * Native Android alarms don't use FCM.
+     *
+     * Make the reminder actionable as SENT
+     * before reusing the existing action logic.
+     */
+    if (
+      event.status === 'PENDING'
+    ) {
+
+      event =
+        await this.repository
+          .markReminderSent(
+            event.id,
+          );
+    }
+
+    if (!event) {
+      throw new BadRequestException(
+        'Unable to activate hydration reminder event',
+      );
+    }
+
+    if (
+      action === 'DRANK'
+    ) {
+
+      return this.markReminderDrank(
+        userId,
+        event.id,
+        amountMl,
+      );
+    }
+
+    return this.snoozeReminder(
+      userId,
+      event.id,
+      snoozeMinutes,
+    );
+  }
+
+  private getDateTimeInTimezone(
+    timestamp: number,
+    timezone: string,
+  ) {
+
+    const formatter =
+      new Intl.DateTimeFormat(
+        'en-GB',
+        {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        },
+      );
+
+    const parts =
+      formatter.formatToParts(
+        new Date(timestamp),
+      );
+
+    const values: Record<
+      string,
+      string
+    > = {};
+
+    for (const part of parts) {
+
+      if (
+        part.type !== 'literal'
+      ) {
+        values[part.type] =
+          part.value;
+      }
+    }
+
+    return {
+      date:
+        `${values.year}-${values.month}-${values.day}`,
+
+      time:
+        `${values.hour}:${values.minute}`,
+    };
+  }
+
+  private async resolveNativeReminderKey(
+    settings: any,
+    userId: string,
+    reminderTime: string,
+  ) {
+
+    const mode =
+      String(
+        settings.reminder_mode,
+      );
+
+    const wake =
+      this.timeToMinutes(
+        String(
+          settings.wake_time,
+        ).slice(0, 5),
+      );
+
+    const current =
+      this.timeToMinutes(
+        reminderTime,
+      );
+
+    const intervalMinutes =
+      Number(
+        settings.interval_minutes ??
+        0,
+      );
+
+    let intervalMatch = false;
+    let customMatch = false;
+    let smartMatch = false;
+
+    let intervalKey = '';
+
+    /*
+     * INTERVAL
+     */
+    if (
+      (
+        mode === 'INTERVAL' ||
+        mode === 'HYBRID'
+      ) &&
+      intervalMinutes > 0
+    ) {
+
+      const elapsed =
+        this.getElapsedActiveMinutesForNative(
+          wake,
+          current,
+        );
+
+      if (
+        elapsed > 0 &&
+        elapsed % intervalMinutes === 0
+      ) {
+        intervalMatch = true;
+
+        intervalKey =
+          `interval-${intervalMinutes}-${current}`;
+      }
+    }
+
+    /*
+     * CUSTOM
+     */
+    if (
+      mode === 'CUSTOM' ||
+      mode === 'HYBRID'
+    ) {
+
+      const customTimes =
+        await this.repository
+          .getReminderTimes(
+            userId,
+          );
+
+      customMatch =
+        customTimes.some(
+          (item: any) =>
+            String(
+              item.reminder_time,
+            ).slice(0, 5) ===
+            reminderTime,
+        );
+    }
+
+    /*
+     * SMART
+     */
+    if (
+      mode === 'SMART'
+    ) {
+
+      const sleep =
+        this.timeToMinutes(
+          String(
+            settings.sleep_time,
+          ).slice(0, 5),
+        );
+
+      const activeMinutes =
+        this.getActiveWindowMinutesForNative(
+          wake,
+          sleep,
+        );
+
+      const elapsed =
+        this.getElapsedActiveMinutesForNative(
+          wake,
+          current,
+        );
+
+      const dailyGoal =
+        Number(
+          settings.daily_goal_ml,
+        );
+
+      if (
+        dailyGoal > 0 &&
+        elapsed > 0 &&
+        elapsed <= activeMinutes
+      ) {
+
+        const reminderCount =
+          Math.min(
+            12,
+            Math.max(
+              4,
+              Math.ceil(
+                dailyGoal / 500,
+              ),
+            ),
+          );
+
+        const smartInterval =
+          Math.max(
+            30,
+            Math.round(
+              activeMinutes /
+              reminderCount,
+            ),
+          );
+
+        if (
+          elapsed %
+          smartInterval ===
+          0
+        ) {
+          smartMatch = true;
+        }
+      }
+    }
+
+    if (
+      mode === 'CUSTOM'
+    ) {
+      return customMatch
+        ? `custom-${reminderTime}`
+        : null;
+    }
+
+    if (
+      mode === 'INTERVAL'
+    ) {
+      return intervalMatch
+        ? intervalKey
+        : null;
+    }
+
+    if (
+      mode === 'SMART'
+    ) {
+      return smartMatch
+        ? `smart-${this.getSmartIntervalForNative(
+          settings,
+        )}-${current}`
+        : null;
+    }
+
+    /*
+     * HYBRID
+     */
+    if (
+      mode === 'HYBRID'
+    ) {
+
+      if (
+        intervalMatch &&
+        customMatch
+      ) {
+        return `hybrid-${reminderTime}`;
+      }
+
+      if (intervalMatch) {
+        return intervalKey;
+      }
+
+      if (customMatch) {
+        return `custom-${reminderTime}`;
+      }
+    }
+
+    return null;
+  }
+
+  private timeToMinutes(
+    value: string,
+  ) {
+
+    const [
+      hours,
+      minutes,
+    ] = value
+      .split(':')
+      .map(Number);
+
+    return (
+      hours * 60 +
+      minutes
+    );
+  }
+
+  private getActiveWindowMinutesForNative(
+    wake: number,
+    sleep: number,
+  ) {
+
+    let duration =
+      sleep - wake;
+
+    if (duration < 0) {
+      duration += 1440;
+    }
+
+    return duration;
+  }
+
+  private getElapsedActiveMinutesForNative(
+    wake: number,
+    current: number,
+  ) {
+
+    let elapsed =
+      current - wake;
+
+    if (elapsed < 0) {
+      elapsed += 1440;
+    }
+
+    return elapsed;
+  }
+
+  private getSmartIntervalForNative(
+    settings: any,
+  ) {
+
+    const wake =
+      this.timeToMinutes(
+        String(
+          settings.wake_time,
+        ).slice(0, 5),
+      );
+
+    const sleep =
+      this.timeToMinutes(
+        String(
+          settings.sleep_time,
+        ).slice(0, 5),
+      );
+
+    const activeMinutes =
+      this.getActiveWindowMinutesForNative(
+        wake,
+        sleep,
+      );
+
+    const dailyGoal =
+      Number(
+        settings.daily_goal_ml,
+      );
+
+    const reminderCount =
+      Math.min(
+        12,
+        Math.max(
+          4,
+          Math.ceil(
+            dailyGoal / 500,
+          ),
+        ),
+      );
+
+    return Math.max(
+      30,
+      Math.round(
+        activeMinutes /
+        reminderCount,
+      ),
+    );
+  }
+
   async getStreak(userId: string) {
     const [settings, history] =
       await Promise.all([

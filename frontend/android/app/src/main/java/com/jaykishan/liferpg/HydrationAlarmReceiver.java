@@ -1,12 +1,10 @@
 package com.jaykishan.liferpg;
 
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 
 public class HydrationAlarmReceiver
         extends BroadcastReceiver {
@@ -17,16 +15,17 @@ public class HydrationAlarmReceiver
             Intent intent
     ) {
 
-        HydrationAlarmScheduler
-                .ensureNotificationChannel(
-                        context
-                );
-
         int alarmId =
                 intent.getIntExtra(
                         "alarm_id",
                         0
                 );
+
+        long triggerAt =
+        intent.getLongExtra(
+                "trigger_at",
+                0L
+        );
 
         String title =
                 intent.getStringExtra(
@@ -38,79 +37,65 @@ public class HydrationAlarmReceiver
                         "body"
                 );
 
-        if (title == null) {
-            title =
-                    "💧 TIME TO HYDRATE";
-        }
-
-        if (body == null) {
-            body =
-                    "Your body is waiting for its next water refill.";
-        }
-
-        Intent openIntent =
-                new Intent(
-                        context,
-                        MainActivity.class
+        int snoozeMinutes =
+                intent.getIntExtra(
+                        "snooze_minutes",
+                        15
                 );
 
-        openIntent.putExtra(
-                "hydrationAlarmId",
+        boolean soundEnabled =
+                intent.getBooleanExtra(
+                        "sound_enabled",
+                        true
+                );
+
+        Intent serviceIntent =
+                new Intent(
+                        context,
+                        HydrationAlarmService.class
+                );
+
+        serviceIntent.setAction(
+                HydrationAlarmService.ACTION_START
+        );
+
+        serviceIntent.putExtra(
+                "alarm_id",
                 alarmId
         );
 
-        openIntent.setFlags(
-                Intent.FLAG_ACTIVITY_SINGLE_TOP |
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
+        serviceIntent.putExtra(
+        "trigger_at",
+        triggerAt
         );
 
-        PendingIntent contentIntent =
-                PendingIntent.getActivity(
-                        context,
-                        alarmId,
-                        openIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT |
-                        PendingIntent.FLAG_IMMUTABLE
-                );
+        serviceIntent.putExtra(
+                "title",
+                title
+        );
 
-        NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(
-                        context,
-                        HydrationAlarmScheduler.CHANNEL_ID
-                )
-                .setSmallIcon(
-                        R.mipmap.ic_launcher
-                )
-                .setContentTitle(
-                        title
-                )
-                .setContentText(
-                        body
-                )
-                .setPriority(
-                        NotificationCompat.PRIORITY_HIGH
-                )
-                .setCategory(
-                        NotificationCompat.CATEGORY_REMINDER
-                )
-                .setAutoCancel(true)
-                .setContentIntent(
-                        contentIntent
-                )
-                .setVibrate(
-                        new long[]{
-                                0,
-                                300,
-                                200,
-                                300
-                        }
-                );
+        serviceIntent.putExtra(
+                "body",
+                body
+        );
 
-        NotificationManagerCompat
-                .from(context)
-                .notify(
-                        alarmId,
-                        builder.build()
-                );
+        serviceIntent.putExtra(
+                "snooze_minutes",
+                snoozeMinutes
+        );
+
+        serviceIntent.putExtra(
+                "sound_enabled",
+                soundEnabled
+        );
+
+        /*
+         * AlarmManager is an allowed path for starting
+         * a foreground service from the background.
+         */
+        ContextCompat.startForegroundService(
+                context,
+                serviceIntent
+        );
     }
 }

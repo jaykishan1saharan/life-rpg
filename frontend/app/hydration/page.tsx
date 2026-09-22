@@ -32,6 +32,12 @@ import {
     FirebaseAuthentication,
 } from '@capacitor-firebase/authentication';
 
+import {
+    scheduleNativeHydrationReminders,
+    clearNativeHydrationReminders,
+    getNativeHydrationPendingAction,
+} from '../../src/lib/native-hydration-scheduler';
+
 type HydrationLog = {
     id: string;
     amount_ml: number;
@@ -769,12 +775,25 @@ export default function HydrationPage() {
                 }
 
                 try {
+                    /*
+                     * ==========================================
+                     * LOAD HYDRATION DATA
+                     * ==========================================
+                     */
                     await loadHydration();
 
                     if (cancelled) {
                         return;
                     }
 
+                    /*
+                     * ==========================================
+                     * WEB / FCM PENDING ACTION
+                     * ==========================================
+                     *
+                     * FCM notifications already contain
+                     * the backend reminder eventId.
+                     */
                     const pending =
                         pendingReminderAction.current;
 
@@ -790,6 +809,131 @@ export default function HydrationPage() {
                         await processHydrationReminderAction(
                             pending,
                         );
+                    }
+
+                    /*
+                     * ==========================================
+                     * NATIVE ANDROID ALARM ACTION
+                     * ==========================================
+                     *
+                     * Native Android alarms do NOT have an
+                     * eventId because they are scheduled ahead
+                     * of time.
+                     *
+                     * The native plugin stores the action after
+                     * DRANK / SNOOZE and we send that information
+                     * to the backend bridge endpoint.
+                     */
+                    if (
+                        Capacitor.isNativePlatform()
+                    ) {
+                        const nativePending =
+                            await getNativeHydrationPendingAction();
+
+                        if (nativePending) {
+                            console.log(
+                                '[Native Hydration Action] Pending action:',
+                                nativePending,
+                            );
+
+                            const token =
+                                await getHydrationAuthToken();
+
+                            if (!token) {
+                                console.warn(
+                                    '[Native Hydration Action] Auth token not ready.',
+                                );
+                            } else {
+                                try {
+                                    const response =
+                                        await fetch(
+                                            `${API_URL}/hydration/native-reminder-action`,
+                                            {
+                                                method: 'POST',
+                                                headers: {
+                                                    Authorization:
+                                                        `Bearer ${token}`,
+                                                    'Content-Type':
+                                                        'application/json',
+                                                },
+                                                body: JSON.stringify({
+                                                    action:
+                                                        nativePending.action,
+                                                    amountMl:
+                                                        nativePending.amountMl,
+                                                    alarmId:
+                                                        nativePending.alarmId,
+                                                    triggerAt:
+                                                        nativePending.triggerAt,
+                                                    snoozeMinutes:
+                                                        nativePending.snoozeMinutes,
+                                                }),
+                                            },
+                                        );
+
+                                    const data =
+                                        await response
+                                            .json()
+                                            .catch(
+                                                () => null,
+                                            );
+
+                                    console.log(
+                                        '[Native Hydration Action] Response:',
+                                        {
+                                            status:
+                                                response.status,
+                                            data,
+                                        },
+                                    );
+
+                                    if (!response.ok) {
+                                        throw new Error(
+                                            data?.message ??
+                                            'Failed to process native hydration action.',
+                                        );
+                                    }
+
+                                    /*
+                                     * ==========================================
+                                     * SUCCESS MESSAGE
+                                     * ==========================================
+                                     */
+                                    if (
+                                        nativePending.action ===
+                                        'DRANK'
+                                    ) {
+                                        setSuccess(
+                                            `✓ ${nativePending.amountMl} ML WATER LOGGED`,
+                                        );
+                                    } else {
+                                        setSuccess(
+                                            `✓ REMINDER SNOOZED FOR ${nativePending.snoozeMinutes} MIN`,
+                                        );
+                                    }
+
+                                    /*
+                                     * ==========================================
+                                     * REFRESH HYDRATION DATA
+                                     * ==========================================
+                                     */
+                                    await loadHydration(
+                                        true,
+                                    );
+                                } catch (error) {
+                                    console.error(
+                                        '[Native Hydration Action] Failed:',
+                                        error,
+                                    );
+
+                                    setError(
+                                        error instanceof Error
+                                            ? error.message
+                                            : 'Native hydration action failed.',
+                                    );
+                                }
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error(

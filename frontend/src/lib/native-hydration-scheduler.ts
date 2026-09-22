@@ -15,6 +15,7 @@ export type NativeHydrationSettings = {
   sleepTime: string;
   notificationsEnabled: boolean;
   soundEnabled: boolean;
+  snoozeMinutes?: number;
 };
 
 type NativeAlarm = {
@@ -22,6 +23,8 @@ type NativeAlarm = {
   at: number;
   title: string;
   body: string;
+  snoozeMinutes: number;
+  soundEnabled: boolean;
 };
 
 type NativeHydrationAlarmPlugin = {
@@ -39,6 +42,14 @@ type NativeHydrationAlarmPlugin = {
   }>;
 
   openExactAlarmSettings(): Promise<void>;
+
+  getPendingAction(): Promise<{
+    action: 'DRANK' | 'SNOOZE';
+    amountMl: number;
+    alarmId: number;
+    triggerAt: number;
+    snoozeMinutes: number;
+  } | undefined>;
 };
 
 const NativeHydrationAlarm =
@@ -117,8 +128,13 @@ function getSmartReminderOffsets(
     );
 
   const interval =
-    duration /
-    reminderCount;
+    Math.max(
+      30,
+      Math.round(
+        duration /
+        reminderCount,
+      ),
+    );
 
   const offsets: number[] =
     [];
@@ -294,9 +310,9 @@ function buildReminderDatesForDay(
 
   if (
     settings.reminderMode ===
-      'INTERVAL' ||
+    'INTERVAL' ||
     settings.reminderMode ===
-      'HYBRID'
+    'HYBRID'
   ) {
 
     const offsets =
@@ -325,9 +341,9 @@ function buildReminderDatesForDay(
 
   if (
     settings.reminderMode ===
-      'CUSTOM' ||
+    'CUSTOM' ||
     settings.reminderMode ===
-      'HYBRID'
+    'HYBRID'
   ) {
 
     const customTimes =
@@ -509,26 +525,24 @@ export async function scheduleNativeHydrationReminders(
     return;
   }
 
-  const alarms: NativeAlarm[] =
-    uniqueDates.map(
-      (
-        date,
-        index,
-      ) => ({
-        id:
-          ALARM_ID_START +
-          index,
+  const alarms: NativeAlarm[] = uniqueDates.map(
+    (date, index) => ({
+      id: ALARM_ID_START + index,
 
-        at:
-          date.getTime(),
+      at: date.getTime(),
 
-        title:
-          '💧 TIME TO HYDRATE',
+      title: '💧 TIME TO HYDRATE',
 
-        body:
-          'Your body is waiting for its next water refill.',
-      }),
-    );
+      body:
+        'Your body is waiting for its next water refill.',
+
+      snoozeMinutes:
+        settings.snoozeMinutes ?? 15,
+
+      soundEnabled:
+        settings.soundEnabled,
+    }),
+  );
 
   const result =
     await NativeHydrationAlarm.schedule({
@@ -587,4 +601,12 @@ export async function clearNativeHydrationReminders() {
   console.log(
     '[Native Alarm] All hydration alarms cancelled.',
   );
+}
+
+export async function getNativeHydrationPendingAction() {
+  if (!Capacitor.isNativePlatform()) {
+    return undefined;
+  }
+
+  return NativeHydrationAlarm.getPendingAction();
 }

@@ -151,4 +151,96 @@ public class NativeHydrationAlarmPlugin
             );
         }
     }
+
+    @PluginMethod
+public void getPendingAction(
+        PluginCall call
+) {
+
+    android.content.SharedPreferences prefs =
+            getContext().getSharedPreferences(
+                    "hydration_alarm_action",
+                    android.content.Context.MODE_PRIVATE
+            );
+
+    String action =
+            prefs.getString(
+                    "pending_action",
+                    null
+            );
+
+    if (action == null) {
+        call.resolve();
+        return;
+    }
+
+    int amountMl =
+            prefs.getInt(
+                    "amount_ml",
+                    250
+            );
+
+    int alarmId =
+            prefs.getInt(
+                    "alarm_id",
+                    0
+            );
+
+    long triggerAt =
+            prefs.getLong(
+                    "trigger_at",
+                    0L
+            );
+
+    int snoozeMinutes =
+            prefs.getInt(
+                    "snooze_minutes",
+                    15
+            );
+
+    JSObject result =
+            new JSObject();
+
+    result.put(
+            "action",
+            action
+    );
+
+    result.put(
+            "amountMl",
+            amountMl
+    );
+
+    result.put(
+            "alarmId",
+            alarmId
+    );
+
+    result.put(
+            "triggerAt",
+            triggerAt
+    );
+
+    result.put(
+            "snoozeMinutes",
+            snoozeMinutes
+    );
+
+    /*
+     * Consume the pending action.
+     *
+     * This prevents the same native
+     * notification action from executing
+     * twice after app restart.
+     */
+    prefs.edit()
+            .clear()
+            .apply();
+
+    call.resolve(
+            result
+    );
+}
+
+
 }

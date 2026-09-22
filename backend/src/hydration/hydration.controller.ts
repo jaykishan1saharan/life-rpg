@@ -123,6 +123,46 @@ export class HydrationController {
     );
   }
 
+  @Post('native-reminder-action')
+  async nativeReminderAction(
+    @CurrentUser() user: any,
+    @Body() body: any,
+  ) {
+
+    const userId =
+      await this.usersService
+        .getInternalUserId(
+          user.uid,
+        );
+
+    return this.hydrationService
+      .processNativeReminderAction(
+        userId,
+
+        body.action,
+
+        Number(
+          body.amountMl ??
+          250,
+        ),
+
+        Number(
+          body.alarmId ??
+          0,
+        ),
+
+        Number(
+          body.triggerAt ??
+          0,
+        ),
+
+        Number(
+          body.snoozeMinutes ??
+          15,
+        ),
+      );
+  }
+
   @Post('push/register')
   async registerPushDevice(
     @CurrentUser() user: any,

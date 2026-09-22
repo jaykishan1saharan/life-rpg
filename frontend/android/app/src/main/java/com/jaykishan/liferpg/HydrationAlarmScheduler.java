@@ -29,7 +29,8 @@ public final class HydrationAlarmScheduler {
             Context context
     ) {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O) {
 
             NotificationManager manager =
                     context.getSystemService(
@@ -51,9 +52,13 @@ public final class HydrationAlarmScheduler {
                     "Life Easy TODO hydration reminders"
             );
 
-            channel.enableVibration(true);
+            channel.enableVibration(
+                    true
+            );
 
-            manager.createNotificationChannel(channel);
+            manager.createNotificationChannel(
+                    channel
+            );
         }
     }
 
@@ -61,7 +66,8 @@ public final class HydrationAlarmScheduler {
             Context context
     ) {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.S) {
 
             AlarmManager alarmManager =
                     context.getSystemService(
@@ -79,7 +85,8 @@ public final class HydrationAlarmScheduler {
             Context context
     ) {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.S) {
 
             Intent intent =
                     new Intent(
@@ -89,7 +96,7 @@ public final class HydrationAlarmScheduler {
             intent.setData(
                     android.net.Uri.parse(
                             "package:" +
-                            context.getPackageName()
+                                    context.getPackageName()
                     )
             );
 
@@ -97,7 +104,9 @@ public final class HydrationAlarmScheduler {
                     Intent.FLAG_ACTIVITY_NEW_TASK
             );
 
-            context.startActivity(intent);
+            context.startActivity(
+                    intent
+            );
         }
     }
 
@@ -106,7 +115,9 @@ public final class HydrationAlarmScheduler {
             JSONArray alarms
     ) throws Exception {
 
-        ensureNotificationChannel(context);
+        ensureNotificationChannel(
+                context
+        );
 
         AlarmManager alarmManager =
                 context.getSystemService(
@@ -125,18 +136,28 @@ public final class HydrationAlarmScheduler {
             );
         }
 
-        cancelAllAlarms(context);
+        cancelAllAlarms(
+                context
+        );
 
-        for (int i = 0; i < alarms.length(); i++) {
+        for (
+                int i = 0;
+                i < alarms.length();
+                i++
+        ) {
 
             JSONObject alarm =
                     alarms.getJSONObject(i);
 
             int id =
-                    alarm.getInt("id");
+                    alarm.getInt(
+                            "id"
+                    );
 
             long triggerAt =
-                    alarm.getLong("at");
+                    alarm.getLong(
+                            "at"
+                    );
 
             String title =
                     alarm.optString(
@@ -150,47 +171,34 @@ public final class HydrationAlarmScheduler {
                             "Your body is waiting for its next water refill."
                     );
 
+            int snoozeMinutes =
+                    alarm.optInt(
+                            "snoozeMinutes",
+                            15
+                    );
+
+            boolean soundEnabled =
+                    alarm.optBoolean(
+                            "soundEnabled",
+                            true
+                    );
+
             if (
                     triggerAt <=
-                    System.currentTimeMillis()
+                            System.currentTimeMillis()
             ) {
                 continue;
             }
 
-            Intent intent =
-                    new Intent(
-                            context,
-                            HydrationAlarmReceiver.class
-                    );
-
-            intent.putExtra(
-                    "alarm_id",
-                    id
-            );
-
-            intent.putExtra(
-                    "title",
-                    title
-            );
-
-            intent.putExtra(
-                    "body",
-                    body
-            );
-
-            PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
-                            context,
-                            id,
-                            intent,
-                            PendingIntent.FLAG_UPDATE_CURRENT |
-                            PendingIntent.FLAG_IMMUTABLE
-                    );
-
-            alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
+            scheduleAlarmInternal(
+                    context,
+                    alarmManager,
+                    id,
                     triggerAt,
-                    pendingIntent
+                    title,
+                    body,
+                    snoozeMinutes,
+                    soundEnabled
             );
         }
 
@@ -205,6 +213,190 @@ public final class HydrationAlarmScheduler {
                         alarms.toString()
                 )
                 .apply();
+    }
+
+    public static void scheduleSingleAlarm(
+            Context context,
+            int id,
+            long triggerAt,
+            String title,
+            String body,
+            int snoozeMinutes
+    ) throws Exception {
+
+        AlarmManager alarmManager =
+                context.getSystemService(
+                        AlarmManager.class
+                );
+
+        if (alarmManager == null) {
+            throw new Exception(
+                    "Android AlarmManager is unavailable."
+            );
+        }
+
+        if (!canScheduleExactAlarms(context)) {
+            throw new Exception(
+                    "Exact alarm permission is not enabled."
+            );
+        }
+
+        scheduleAlarmInternal(
+                context,
+                alarmManager,
+                id,
+                triggerAt,
+                title,
+                body,
+                snoozeMinutes,
+                true
+        );
+
+        /*
+         * Preserve the existing future alarms.
+         * Add this snooze alarm to the saved list.
+         */
+        try {
+
+            String saved =
+                    context
+                            .getSharedPreferences(
+                                    PREFS,
+                                    Context.MODE_PRIVATE
+                            )
+                            .getString(
+                                    KEY_ALARMS,
+                                    "[]"
+                            );
+
+            JSONArray alarms =
+                    new JSONArray(saved);
+
+            JSONObject snoozeAlarm =
+                    new JSONObject();
+
+            snoozeAlarm.put(
+                    "id",
+                    id
+            );
+
+            snoozeAlarm.put(
+                    "at",
+                    triggerAt
+            );
+
+            snoozeAlarm.put(
+                    "title",
+                    title
+            );
+
+            snoozeAlarm.put(
+                    "body",
+                    body
+            );
+
+            snoozeAlarm.put(
+                    "snoozeMinutes",
+                    snoozeMinutes
+            );
+
+            snoozeAlarm.put(
+                    "soundEnabled",
+                    true
+            );
+
+            alarms.put(
+                    snoozeAlarm
+            );
+
+            context
+                    .getSharedPreferences(
+                            PREFS,
+                            Context.MODE_PRIVATE
+                    )
+                    .edit()
+                    .putString(
+                            KEY_ALARMS,
+                            alarms.toString()
+                    )
+                    .apply();
+
+        } catch (Exception error) {
+
+            android.util.Log.e(
+                    "HydrationAlarm",
+                    "Failed to save snooze alarm",
+                    error
+            );
+        }
+    }
+
+    private static void scheduleAlarmInternal(
+            Context context,
+            AlarmManager alarmManager,
+            int id,
+            long triggerAt,
+            String title,
+            String body,
+            int snoozeMinutes,
+            boolean soundEnabled
+    ) {
+
+        Intent intent =
+                new Intent(
+                        context,
+                        HydrationAlarmReceiver.class
+                );
+
+        intent.putExtra(
+        "alarm_id",
+        id
+);
+
+intent.putExtra(
+        "trigger_at",
+        triggerAt
+);
+
+intent.putExtra(
+        "title",
+        title
+);
+
+intent.putExtra(
+        "body",
+        body
+);
+
+intent.putExtra(
+        "snooze_minutes",
+        snoozeMinutes
+);
+
+intent.putExtra(
+        "sound_enabled",
+        soundEnabled
+);
+
+        PendingIntent pendingIntent =
+                PendingIntent.getBroadcast(
+                        context,
+                        id,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT |
+                                PendingIntent.FLAG_IMMUTABLE
+                );
+
+        AlarmManager.AlarmClockInfo alarmClockInfo =
+        new AlarmManager.AlarmClockInfo(
+                triggerAt,
+                pendingIntent
+        );
+
+        alarmManager.setAlarmClock(
+        alarmClockInfo,
+        pendingIntent
+        );
     }
 
     public static void cancelAllAlarms(
@@ -236,7 +428,9 @@ public final class HydrationAlarmScheduler {
             try {
 
                 JSONArray alarms =
-                        new JSONArray(saved);
+                        new JSONArray(
+                                saved
+                        );
 
                 for (
                         int i = 0;
@@ -245,38 +439,27 @@ public final class HydrationAlarmScheduler {
                 ) {
 
                     JSONObject alarm =
-                            alarms.getJSONObject(i);
+                            alarms.getJSONObject(
+                                    i
+                            );
 
                     int id =
-                            alarm.getInt("id");
-
-                    Intent intent =
-                            new Intent(
-                                    context,
-                                    HydrationAlarmReceiver.class
+                            alarm.getInt(
+                                    "id"
                             );
 
-                    PendingIntent pendingIntent =
-                            PendingIntent.getBroadcast(
-                                    context,
-                                    id,
-                                    intent,
-                                    PendingIntent.FLAG_UPDATE_CURRENT |
-                                    PendingIntent.FLAG_IMMUTABLE
-                            );
-
-                    alarmManager.cancel(
-                            pendingIntent
+                    cancelAlarmById(
+                            context,
+                            alarmManager,
+                            id
                     );
-
-                    pendingIntent.cancel();
                 }
 
             } catch (Exception error) {
 
                 android.util.Log.e(
                         "HydrationAlarm",
-                        "Failed to cancel alarms",
+                        "Failed to cancel saved alarms",
                         error
                 );
             }
@@ -288,8 +471,38 @@ public final class HydrationAlarmScheduler {
                         Context.MODE_PRIVATE
                 )
                 .edit()
-                .remove(KEY_ALARMS)
+                .remove(
+                        KEY_ALARMS
+                )
                 .apply();
+    }
+
+    private static void cancelAlarmById(
+            Context context,
+            AlarmManager alarmManager,
+            int id
+    ) {
+
+        Intent intent =
+                new Intent(
+                        context,
+                        HydrationAlarmReceiver.class
+                );
+
+        PendingIntent pendingIntent =
+                PendingIntent.getBroadcast(
+                        context,
+                        id,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT |
+                                PendingIntent.FLAG_IMMUTABLE
+                );
+
+        alarmManager.cancel(
+                pendingIntent
+        );
+
+        pendingIntent.cancel();
     }
 
     public static void restoreAlarms(
@@ -314,7 +527,9 @@ public final class HydrationAlarmScheduler {
         try {
 
             JSONArray alarms =
-                    new JSONArray(saved);
+                    new JSONArray(
+                            saved
+                    );
 
             JSONArray futureAlarms =
                     new JSONArray();
@@ -329,21 +544,29 @@ public final class HydrationAlarmScheduler {
             ) {
 
                 JSONObject alarm =
-                        alarms.getJSONObject(i);
+                        alarms.getJSONObject(
+                                i
+                        );
 
                 if (
                         alarm.getLong("at") >
-                        now
+                                now
                 ) {
-                    futureAlarms.put(alarm);
+
+                    futureAlarms.put(
+                            alarm
+                    );
                 }
             }
 
             if (
-                    futureAlarms.length() ==
-                    0
+                    futureAlarms.length() == 0
             ) {
-                cancelAllAlarms(context);
+
+                cancelAllAlarms(
+                        context
+                );
+
                 return;
             }
 
