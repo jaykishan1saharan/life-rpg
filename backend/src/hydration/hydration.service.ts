@@ -20,6 +20,7 @@ type HydrationSetupData = {
   soundEnabled?: boolean;
   inAppEnabled?: boolean;
   snoozeMinutes?: number;
+  reminderStyle?: string;
 };
 
 @Injectable()
@@ -195,6 +196,12 @@ export class HydrationService {
         Number(
           normalized.snooze_minutes ??
           existing.snooze_minutes,
+        ),
+      reminderStyle:
+        String(
+          normalized.reminder_style ??
+          existing.reminder_style ??
+          'NOTIFICATION',
         ),
     });
 
@@ -1188,21 +1195,18 @@ export class HydrationService {
   private normalizeSettings(
     data: Record<string, unknown>,
   ): Record<string, unknown> {
-    const map: Record<
-      string,
-      string
-    > = {
+    const map: Record<string, string> = {
       dailyGoalMl: 'daily_goal_ml',
       reminderMode: 'reminder_mode',
       intervalMinutes: 'interval_minutes',
       wakeTime: 'wake_time',
       sleepTime: 'sleep_time',
       timezone: 'timezone',
-      notificationsEnabled:
-        'notifications_enabled',
+      notificationsEnabled: 'notifications_enabled',
       soundEnabled: 'sound_enabled',
       inAppEnabled: 'in_app_enabled',
       snoozeMinutes: 'snooze_minutes',
+      reminderStyle: 'reminder_style',
       isActive: 'is_active',
     };
 
@@ -1237,6 +1241,18 @@ export class HydrationService {
       'CUSTOM',
       'HYBRID',
     ];
+
+    if (
+      data.reminderStyle &&
+      ![
+        'NOTIFICATION',
+        'FULL_SCREEN',
+      ].includes(data.reminderStyle)
+    ) {
+      throw new BadRequestException(
+        'Invalid reminder style',
+      );
+    }
 
     if (
       !allowedModes.includes(

@@ -33,6 +33,7 @@ export class HydrationRepository {
       soundEnabled?: boolean;
       inAppEnabled?: boolean;
       snoozeMinutes?: number;
+      reminderStyle?: string;
     },
   ) {
     const result = await this.database.query(
@@ -48,10 +49,11 @@ export class HydrationRepository {
         notifications_enabled,
         sound_enabled,
         in_app_enabled,
-        snooze_minutes
+        snooze_minutes,
+        reminder_style
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
       )
       RETURNING *
       `,
@@ -67,6 +69,7 @@ export class HydrationRepository {
         data.soundEnabled ?? true,
         data.inAppEnabled ?? true,
         data.snoozeMinutes ?? 15,
+        data.reminderStyle ?? 'NOTIFICATION',
       ],
     );
 
@@ -91,6 +94,7 @@ export class HydrationRepository {
       'sound_enabled',
       'in_app_enabled',
       'snooze_minutes',
+      'reminder_style',
       'is_active',
     ];
 
