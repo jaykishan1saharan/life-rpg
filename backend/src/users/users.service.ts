@@ -59,7 +59,9 @@ export class UsersService {
     return user.id;
   }
 
-  async deleteByFirebaseUid(firebaseUid: string) {
+  async deleteByFirebaseUid(
+    firebaseUid: string,
+  ) {
     return this.usersRepository.deleteByFirebaseUid(
       firebaseUid,
     );

@@ -86,10 +86,7 @@ export class UsersRepository {
       `
       DELETE FROM users
       WHERE firebase_uid = $1
-      RETURNING
-        id,
-        firebase_uid,
-        email
+      RETURNING id, firebase_uid, email
       `,
       [firebaseUid],
     );
