@@ -2,6 +2,9 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
+  Param,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 
@@ -21,11 +24,32 @@ export class UsersController {
     return this.usersService.syncUser(user);
   }
 
-  @Delete('me')
-  @UseGuards(FirebaseAuthGuard)
-  async deleteMe(@CurrentUser() user: any) {
-    return this.usersService.deleteByFirebaseUid(
-      user.uid,
-    );
+  @Delete('internal/firebase/:firebaseUid')
+  async deleteFirebaseUser(
+    @Param('firebaseUid') firebaseUid: string,
+    @Headers('x-internal-secret') internalSecret?: string,
+  ) {
+    const expectedSecret =
+      process.env.INTERNAL_CLEANUP_SECRET;
+
+    if (
+      !expectedSecret ||
+      internalSecret !== expectedSecret
+    ) {
+      throw new UnauthorizedException(
+        'Invalid internal cleanup secret',
+      );
+    }
+
+    const deletedUser =
+      await this.usersService.deleteByFirebaseUid(
+        firebaseUid,
+      );
+
+    return {
+      success: true,
+      deleted: Boolean(deletedUser),
+      firebaseUid,
+    };
   }
 }
