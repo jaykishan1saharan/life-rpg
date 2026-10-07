@@ -18,6 +18,8 @@ import com.jaykishan.lifetodo.ui.screens.RewardsScreen
 import com.jaykishan.lifetodo.ui.screens.InventoryScreen
 import com.jaykishan.lifetodo.ui.screens.SettingsScreen
 
+import com.jaykishan.lifetodo.data.ApiClient
+
 enum class AppScreen {
     HOME,
     QUESTS,
@@ -142,6 +144,7 @@ fun LifeEasyApp(
                             currentScreen = AppScreen.PROFILE
                         },
                         onLogout = {
+                            ApiClient.clearCache()
                             onLogout()
                         }
                     )

@@ -43,6 +43,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "846948428614-kvquoati3ue8obqe3cilgn1oh8rfuv1o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.jaykishan.lifetodo",
+            "certificate_hash": "142f623f1ed54444a2e5d4d286bd8c54d7848800"
+          }
+        },
+        {
           "client_id": "846948428614-nq3plfdj7g8dh42kge7bldh76u7sq7v2.apps.googleusercontent.com",
           "client_type": 3
         }

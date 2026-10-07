@@ -2,6 +2,7 @@ package com.jaykishan.lifetodo.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,7 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,17 +21,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.jaykishan.lifetodo.data.FirebaseAuthManager
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var email by remember {
         mutableStateOf("")
@@ -39,6 +49,10 @@ fun LoginScreen(
     }
 
     var isLoading by remember {
+        mutableStateOf(false)
+    }
+
+    var isGoogleLoading by remember {
         mutableStateOf(false)
     }
 
@@ -82,6 +96,7 @@ fun LoginScreen(
 
         OutlinedTextField(
             value = email,
+
             onValueChange = {
                 email = it
                 errorMessage = null
@@ -102,6 +117,7 @@ fun LoginScreen(
 
         OutlinedTextField(
             value = password,
+
             onValueChange = {
                 password = it
                 errorMessage = null
@@ -160,19 +176,19 @@ fun LoginScreen(
 
                 isLoading = true
                 errorMessage = null
-
             },
 
             modifier = Modifier.fillMaxWidth(),
 
-            enabled = !isLoading
+            enabled =
+                !isLoading &&
+                !isGoogleLoading
         ) {
 
             if (isLoading) {
 
                 CircularProgressIndicator(
-                    modifier = Modifier
-                        .height(20.dp)
+                    modifier = Modifier.height(20.dp)
                 )
 
             } else {
@@ -194,20 +210,21 @@ fun LoginScreen(
                 return@LaunchedEffect
             }
 
-            val result = if (isRegisterMode) {
+            val result =
+                if (isRegisterMode) {
 
-                FirebaseAuthManager.signUp(
-                    email = email,
-                    password = password
-                )
+                    FirebaseAuthManager.signUp(
+                        email = email,
+                        password = password
+                    )
 
-            } else {
+                } else {
 
-                FirebaseAuthManager.signIn(
-                    email = email,
-                    password = password
-                )
-            }
+                    FirebaseAuthManager.signIn(
+                        email = email,
+                        password = password
+                    )
+                }
 
             result.fold(
 
@@ -229,6 +246,100 @@ fun LoginScreen(
         }
 
         Spacer(
+            modifier = Modifier.height(20.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            HorizontalDivider(
+                modifier = Modifier.weight(1f)
+            )
+
+            Text(
+                text = "  OR  ",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(16.dp)
+        )
+
+        OutlinedButton(
+            onClick = {
+
+                if (isGoogleLoading) {
+                    return@OutlinedButton
+                }
+
+                errorMessage = null
+                isGoogleLoading = true
+
+                scope.launch {
+
+                    val result =
+                        FirebaseAuthManager.signInWithGoogle(
+                            context
+                        )
+
+                    result.fold(
+
+                        onSuccess = {
+
+                            isGoogleLoading = false
+                            onLoginSuccess()
+                        },
+
+                        onFailure = { error ->
+
+                            isGoogleLoading = false
+
+                            errorMessage =
+                                error.message
+                                    ?: "Google Sign-In failed"
+                        }
+                    )
+                }
+            },
+
+            modifier = Modifier.fillMaxWidth(),
+
+            enabled =
+                !isLoading &&
+                !isGoogleLoading
+        ) {
+
+            if (isGoogleLoading) {
+
+                CircularProgressIndicator(
+                    modifier = Modifier.height(20.dp)
+                )
+
+            } else {
+
+                Text(
+                    text = "G",
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(0.dp)
+                )
+
+                Text(
+                    text = "  Continue with Google"
+                )
+            }
+        }
+
+        Spacer(
             modifier = Modifier.height(12.dp)
         )
 
@@ -239,7 +350,11 @@ fun LoginScreen(
                     !isRegisterMode
 
                 errorMessage = null
-            }
+            },
+
+            enabled =
+                !isLoading &&
+                !isGoogleLoading
         ) {
 
             Text(
