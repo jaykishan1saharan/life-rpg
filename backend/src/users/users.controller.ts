@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   UseGuards,
 } from '@nestjs/common';
@@ -18,5 +19,13 @@ export class UsersController {
   @UseGuards(FirebaseAuthGuard)
   async getMe(@CurrentUser() user: any) {
     return this.usersService.syncUser(user);
+  }
+
+  @Delete('me')
+  @UseGuards(FirebaseAuthGuard)
+  async deleteMe(@CurrentUser() user: any) {
+    return this.usersService.deleteByFirebaseUid(
+      user.uid,
+    );
   }
 }

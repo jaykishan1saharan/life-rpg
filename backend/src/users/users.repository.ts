@@ -80,4 +80,17 @@ export class UsersRepository {
 
     return result.rows[0];
   }
+
+  async deleteByFirebaseUid(firebaseUid: string) {
+    const result = await this.database.query(
+      `
+      DELETE FROM users
+      WHERE firebase_uid = $1
+      RETURNING id, firebase_uid, email
+      `,
+      [firebaseUid],
+    );
+
+    return result.rows[0] ?? null;
+  }
 }
